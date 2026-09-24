@@ -141,6 +141,18 @@ Appodo DeCa v01 · basado en Appodo v4.8.1
 
 ## 9. Disparador para retomar
 
-Cuando DeCA se dé por "feature-complete" en el ERP (informe de auditoría +
-CRUD/paginación cerrados, sin cambios de fondo pendientes), volver a este
-documento y ejecutar la sección 6.
+**No tocar el repo (ni siquiera el scaffold vacío) hasta que se cumplan
+las tres cosas** (decisión 2026-09-24, ninguna es opcional):
+
+1. DeCA se dé por "feature-complete" en el ERP (informe de auditoría +
+   CRUD/paginación cerrados, sin cambios de fondo pendientes).
+2. Estén escritos los manuales de uso de DeCA en el ERP (referencia de qué
+   documentar también en el standalone).
+3. Estén definidos los requisitos de instalación del standalone (qué se
+   necesita para levantarlo: Docker, versión mínima de Postgres, variables
+   de entorno obligatorias vs. opcionales, requisitos de la API de IA si se
+   quiere extracción automática...) — esto también alimenta
+   `docs/INSTALACION.md` de la sección 5.
+
+Cuando las tres estén cerradas, volver a este documento y ejecutar la
+sección 6.
