@@ -97,14 +97,41 @@ appodo-deca/
 8. `docker-compose.yml` + `.env.example` + README de instalación.
 9. Decidir licencia (ver abajo) y publicar.
 
-## 7. Pendiente de decidir con el usuario
+## 7. Nombre y versión — decidido (2026-09-24)
+
+**Nombre: "Appodo DeCa"**, se mantiene la marca a propósito. Sirve como
+publicidad: quien instala la versión gratuita standalone para gestionar
+CMR/albaranes ve la marca Appodo cada vez que la usa, y si necesita más
+(control horario, facturación, CRM...) ya sabe dónde mirar — mismo patrón
+que la edición community de herramientas como n8o/Plausible frente a su
+cloud de pago. Repo en GitHub: `appodo-deca`.
+
+**Versión: dos números, con significado distinto cada uno.**
+
+```
+Appodo DeCa v01 · basado en Appodo v4.8.1
+```
+
+- **v01, v02, v03...** — contador propio del standalone. Empieza en `01`,
+  sube en cada release suyo (fixes/features del propio DeCa standalone),
+  independiente del SemVer de Appodo.
+- **basado en Appodo vX.Y.Z** — congelado. Es la versión de Appodo ERP de la
+  que se hizo el último resync de código hacia el standalone. **No se
+  actualiza sola** (el standalone no tiene forma de saber la versión actual
+  de Appodo en producción) — solo cambia cuando alguien trae manualmente
+  mejoras del módulo DeCA del ERP hacia aquí y anota contra qué versión de
+  Appodo lo hizo.
+- Dónde se muestra: footer/about del frontend, `README.md`, y cada entrada
+  del `CHANGELOG.md` del standalone anota la versión de Appodo del resync
+  correspondiente (si esa entrada viene de un resync; los releases propios
+  de fixes/features del standalone no tocan ese número).
+
+## 8. Pendiente de decidir con el usuario
 
 - **Licencia**: MIT (máxima libertad, cualquiera puede hacer SaaS con él) vs.
   AGPL (obliga a publicar el código si alguien lo ofrece como servicio online
   modificado) — recomendable AGPL si se quiere evitar que un tercero lo
   revenda como SaaS cerrado sin contribuir cambios de vuelta.
-- **Nombre del proyecto/repo** en GitHub (¿`appodo-deca`? ¿nombre propio sin
-  "Appodo" si se quiere desligar de la marca del ERP?).
 - **Multi-usuario dentro de una instancia**: ¿hace falta más de un rol
   (admin/operador) o con esos dos basta para el caso de uso real de DeCA
   (gestión de expediciones de transporte)?
@@ -112,7 +139,7 @@ appodo-deca/
   el informe de auditoría y CRUD/paginación siguen sin cerrar — bloqueante
   antes de hacer el scaffold real, no solo detalle menor.
 
-## 8. Disparador para retomar
+## 9. Disparador para retomar
 
 Cuando DeCA se dé por "feature-complete" en el ERP (informe de auditoría +
 CRUD/paginación cerrados, sin cambios de fondo pendientes), volver a este
