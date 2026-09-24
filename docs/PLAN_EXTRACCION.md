@@ -106,25 +106,43 @@ CMR/albaranes ve la marca Appodo cada vez que la usa, y si necesita más
 que la edición community de herramientas como n8o/Plausible frente a su
 cloud de pago. Repo en GitHub: `appodo-deca`.
 
-**Versión: dos números, con significado distinto cada uno.**
+**Versión: dos números, jerarquía visual distinta — uno es el dato, el otro
+es la anécdota.**
 
-```
-Appodo DeCa v01 · basado en Appodo v4.8.1
-```
-
-- **v01, v02, v03...** — contador propio del standalone. Empieza en `01`,
-  sube en cada release suyo (fixes/features del propio DeCa standalone),
-  independiente del SemVer de Appodo.
-- **basado en Appodo vX.Y.Z** — congelado. Es la versión de Appodo ERP de la
-  que se hizo el último resync de código hacia el standalone. **No se
+- **`Appodo DeCa v01`** (grande, protagonista) — contador propio del
+  standalone. Empieza en `01`, sube en cada release suyo (fixes/features
+  del propio DeCa standalone), independiente del SemVer de Appodo. Es el
+  número que le importa a quien usa la app.
+- **"última sincronización con Appodo: v4.8.1 (2026-09-24)"** (pequeño,
+  informativo, tipo pie de página/anécdota) — versión + fecha de Appodo ERP
+  de la que se hizo el último resync de código hacia el standalone. **No se
   actualiza sola** (el standalone no tiene forma de saber la versión actual
-  de Appodo en producción) — solo cambia cuando alguien trae manualmente
-  mejoras del módulo DeCA del ERP hacia aquí y anota contra qué versión de
-  Appodo lo hizo.
-- Dónde se muestra: footer/about del frontend, `README.md`, y cada entrada
-  del `CHANGELOG.md` del standalone anota la versión de Appodo del resync
-  correspondiente (si esa entrada viene de un resync; los releases propios
-  de fixes/features del standalone no tocan ese número).
+  de Appodo en producción, que además sube varias veces al día — ver
+  evidencia real del 2026-09-24 más abajo) — solo cambia cuando alguien
+  trae manualmente mejoras del módulo DeCA del ERP hacia aquí.
+
+Ejemplo de layout (footer/about):
+
+```
+Appodo DeCa
+v01
+
+Última sincronización con Appodo: v4.8.1 · 2026-09-24
+```
+
+Dónde se muestra: footer/about del frontend (jerarquía de arriba), título
+de pestaña/README solo con "Appodo DeCa vNN" (sin la referencia a Appodo,
+esa queda para el about/footer), y cada entrada del `CHANGELOG.md` del
+standalone que venga de un resync anota la versión+fecha de Appodo de
+origen (los releases propios de fixes/features del standalone no tocan
+ese dato).
+
+**Evidencia de por qué el número de Appodo va pequeño y no se comparte:**
+en la misma sesión en que se decidió esto, Appodo pasó de v4.8.1 a v4.13.0
+(5 releases en horas) sin que ninguno tocara el standalone — confirma que
+mostrarlo en grande o compartir número induciría a pensar que DeCa
+standalone se quedó "desactualizado" cuando en realidad simplemente no ha
+habido resync.
 
 ## 8. Pendiente de decidir con el usuario
 
