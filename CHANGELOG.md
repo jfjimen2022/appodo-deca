@@ -46,5 +46,20 @@ _Sincronizado desde Appodo ERP v4.19.1 (2026-09-25)._
   `TODO(standalone):` en el código donde aplicaba.
 - Cliente de IA simplificado a un único proveedor (Gemini) configurable por
   variable de entorno, sin la cascada de clave por usuario/empresa del ERP.
-- Interfaz verificada por build y por llamadas API reales (`curl`), pero
-  pendiente de una pasada de verificación visual en navegador.
+- El ERP Appodo cerró en su v4.20.0 (posterior al resync de este release)
+  una ventana de corrección configurable tras generar el DeCA, con
+  historial de quién/qué campo cambió. El standalone todavía tiene el
+  comportamiento anterior: una vez generado, solo se puede anular, no
+  corregir — el propio diálogo de "Generar DeCA" lo dice así en el texto.
+  Traerlo es la primera candidata para `v02`.
+
+### Verificado (2026-09-25, en navegador con Playwright)
+
+Stack completo levantado con Docker, sesión real por cookie HttpOnly,
+ciclo de vida completo de una expedición (crear manual → rellenar →
+guardar como borrador → confirmar → generar DeCA), PDF oficial con QR
+generado correctamente, descarga pública del PDF verificada con `curl`
+**sin ninguna cookie de sesión** (200, `application/pdf`), agenda de
+transportistas autorrellenada a partir de la expedición guardada, pantalla
+de Configuración con los campos reales. Capturas en
+[`docs/capturas/`](docs/capturas/), usadas también en el README.

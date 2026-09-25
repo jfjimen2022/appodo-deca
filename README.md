@@ -35,6 +35,14 @@ CRM, gestión multiempresa...), esa es la versión de pago.
 
 Manual de uso completo: [`docs/MANUAL_USO.md`](docs/MANUAL_USO.md).
 
+## Capturas
+
+| | |
+|---|---|
+| ![Login](docs/capturas/01_login.png) | ![Listado de expediciones](docs/capturas/02_expediciones.png) |
+| ![Formulario de expedición](docs/capturas/03_formulario.png) | ![Detalle con QR de verificación pública](docs/capturas/04_detalle_qr.png) |
+| ![Agenda](docs/capturas/05_agenda.png) | ![Configuración](docs/capturas/06_configuracion.png) |
+
 ## Stack
 
 - **Backend:** Django 4.2 + Django REST Framework, PostgreSQL, JWT en
@@ -96,11 +104,13 @@ código bajo la misma licencia.
 
 ## Estado del proyecto
 
-`v01` — scaffold inicial funcional, verificado end-to-end con Docker
-(build, migraciones automáticas, login real). Quedan TODOs explícitos en el
-código (`TODO(standalone):`, ver [`CHANGELOG.md`](CHANGELOG.md)) antes de
-considerarlo listo para producción sin supervisión — ver el estado "Conocido
-/ pendiente" de la versión actual.
+`v01` — verificado end-to-end de verdad, en navegador (Docker real, login,
+ciclo completo crear → confirmar → generar DeCA → PDF con QR real →
+descarga pública sin sesión → agenda autorrellenada). Ver capturas arriba.
+Quedan TODOs explícitos en el código (`TODO(standalone):`, ver
+[`CHANGELOG.md`](CHANGELOG.md)) antes de considerarlo listo para producción
+sin supervisión — ver el estado "Conocido / pendiente" de la versión
+actual.
 
 ## Autor y contacto
 
