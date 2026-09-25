@@ -1,0 +1,52 @@
+{
+  "login": {
+    "title": "Appodo DeCa",
+    "subtitle": "Sign in to continue",
+    "label_usuario": "Username",
+    "label_password": "Password",
+    "btn_entrar": "Sign in",
+    "entrando": "Signing in...",
+    "error_credenciales": "Wrong username or password.",
+    "error_generico": "Could not sign in. Please try again."
+  },
+  "layout": {
+    "cerrar_sesion": "Sign out"
+  },
+  "usuarios": {
+    "title": "Users",
+    "subtitle": "Manage who can access Appodo DeCa.",
+    "btn_nuevo": "New user",
+    "col_usuario": "Username",
+    "col_nombre": "Name",
+    "col_email": "Email",
+    "col_rol": "Role",
+    "col_activo": "Active",
+    "col_acciones": "Actions",
+    "rol_admin": "Administrator",
+    "rol_operador": "Operator",
+    "nuevo_titulo": "New user",
+    "editar_titulo": "Edit user",
+    "label_username": "Username",
+    "label_password": "Password",
+    "label_password_editar": "New password (optional)",
+    "label_nombre": "First name",
+    "label_apellidos": "Last name",
+    "label_email": "Email",
+    "label_es_admin": "Is administrator",
+    "label_activo": "Active",
+    "btn_guardar": "Save",
+    "btn_cancelar": "Cancel",
+    "guardado_ok": "User saved.",
+    "error_guardar": "Could not save the user.",
+    "confirmar_borrado_titulo": "Delete user",
+    "confirmar_borrado_desc": "This user will lose access to Appodo DeCa. This cannot be undone.",
+    "btn_borrar": "Delete",
+    "borrado_ok": "User deleted.",
+    "error_borrar": "Could not delete the user.",
+    "error_cargar": "Could not load the user list.",
+    "vacio": "There are no other users yet."
+  },
+  "errores": {
+    "generico": "An unexpected error occurred."
+  }
+}

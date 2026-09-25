@@ -1,0 +1,52 @@
+{
+  "login": {
+    "title": "Appodo DeCa",
+    "subtitle": "Inicia sesión para continuar",
+    "label_usuario": "Usuario",
+    "label_password": "Contraseña",
+    "btn_entrar": "Entrar",
+    "entrando": "Entrando...",
+    "error_credenciales": "Usuario o contraseña incorrectos.",
+    "error_generico": "No se pudo iniciar sesión. Inténtalo de nuevo."
+  },
+  "layout": {
+    "cerrar_sesion": "Cerrar sesión"
+  },
+  "usuarios": {
+    "title": "Usuarios",
+    "subtitle": "Altas y bajas de quién puede entrar a Appodo DeCa.",
+    "btn_nuevo": "Nuevo usuario",
+    "col_usuario": "Usuario",
+    "col_nombre": "Nombre",
+    "col_email": "Email",
+    "col_rol": "Rol",
+    "col_activo": "Activo",
+    "col_acciones": "Acciones",
+    "rol_admin": "Administrador",
+    "rol_operador": "Operador",
+    "nuevo_titulo": "Nuevo usuario",
+    "editar_titulo": "Editar usuario",
+    "label_username": "Usuario",
+    "label_password": "Contraseña",
+    "label_password_editar": "Nueva contraseña (opcional)",
+    "label_nombre": "Nombre",
+    "label_apellidos": "Apellidos",
+    "label_email": "Email",
+    "label_es_admin": "Es administrador",
+    "label_activo": "Activo",
+    "btn_guardar": "Guardar",
+    "btn_cancelar": "Cancelar",
+    "guardado_ok": "Usuario guardado.",
+    "error_guardar": "No se pudo guardar el usuario.",
+    "confirmar_borrado_titulo": "Eliminar usuario",
+    "confirmar_borrado_desc": "Se eliminará el acceso de este usuario a Appodo DeCa. Esta acción no se puede deshacer.",
+    "btn_borrar": "Eliminar",
+    "borrado_ok": "Usuario eliminado.",
+    "error_borrar": "No se pudo eliminar el usuario.",
+    "error_cargar": "No se pudo cargar la lista de usuarios.",
+    "vacio": "Todavía no hay usuarios además de ti."
+  },
+  "errores": {
+    "generico": "Ha ocurrido un error inesperado."
+  }
+}
