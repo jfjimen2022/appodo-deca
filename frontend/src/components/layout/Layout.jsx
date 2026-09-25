@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Truck, Users2, Settings, Users, LogOut, Package } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { APP_VERSION, APPODO_SYNC_VERSION, APPODO_SYNC_FECHA } from '../../version'
 
 // Shell mínimo del standalone: cabecera con el nombre de la app + nav con
 // 3-4 enlaces (Expediciones, Agenda, Configuración/Usuarios si es admin) +
@@ -61,6 +62,12 @@ export default function Layout() {
       <main className="flex-1 min-h-0 overflow-y-auto p-4">
         <Outlet />
       </main>
+      <footer className="shrink-0 border-t bg-white px-4 py-2 text-center">
+        <div className="text-sm font-semibold text-gray-700">Appodo DeCa {APP_VERSION}</div>
+        <div className="text-xs text-gray-400">
+          Última sincronización con Appodo: {APPODO_SYNC_VERSION} · {APPODO_SYNC_FECHA}
+        </div>
+      </footer>
     </div>
   )
 }
