@@ -16,6 +16,13 @@ Es una extracción del módulo DeCA del [ERP Appodo](https://appodo.dev),
 permisos por rol complejos) — si necesitas más (control horario, facturación,
 CRM, gestión multiempresa...), esa es la versión de pago.
 
+> 🤝 **¿No quieres complicarte la vida instalándolo tú?** Te lo instalamos y
+> mantenemos nosotros en tu propio servidor (o en el nuestro) — actualizaciones,
+> copias de seguridad y soporte incluidos, con el ahorro de una instalación
+> propia frente a una suscripción por usuario o por documento. Más info en
+> [appodo.dev/appodo-deca](https://appodo.dev/appodo-deca) o escribe
+> directamente a **juanf.jipa@gmail.com**.
+
 ## Funcionalidades
 
 - Ciclo de vida completo de una expedición: borrador → confirmado →
@@ -118,7 +125,8 @@ Desarrollado por **Juan Fco Jiménez Pascual**, autor también del
 [ERP Appodo](https://appodo.dev).
 
 ¿Tu empresa necesita implementarlo, personalizarlo, integrarlo con otros
-sistemas, o simplemente quieres soporte o migrar a la versión completa del
-ERP? Contacto:
+sistemas, o simplemente quieres soporte, instalación gestionada o migrar a
+la versión completa del ERP? Contacto:
 
 📧 **juanf.jipa@gmail.com**
+🌐 [appodo.dev/appodo-deca](https://appodo.dev/appodo-deca)
