@@ -1,3 +1,9 @@
+"""Serializers DRF de DeCA: forma de entrada/salida de la API y validación de
+formato (NIF/CIF con dígito de control, matrículas, reglas de edición según
+el estado). Las reglas de negocio de verdad (qué es obligatorio, quién puede
+corregir y hasta cuándo) viven en services/; aquí solo se aplican. Single-
+tenant: ModelSerializer estándar, sin el acotado por empresa del ERP origen."""
+
 import re
 
 from django.utils import timezone
@@ -102,6 +108,9 @@ class ConfiguracionDecaSerializer(serializers.ModelSerializer):
     # Lista efectiva de obligatorios para Confirmar (según
     # `exigir_datos_destinatario`): la pantalla la usa para marcar los campos,
     # de la MISMA fuente que valida el servidor (services/obligatorios_service.py).
+    """Configuración única de la instalación. Expone además la lista efectiva
+    de campos obligatorios para que la pantalla los marque con la misma
+    fuente que valida el servidor."""
     campos_obligatorios = serializers.SerializerMethodField()
 
     class Meta:
@@ -126,6 +135,8 @@ class ConfiguracionDecaSerializer(serializers.ModelSerializer):
         read_only_fields = ['ultimo_numero_automatico']
 
     def get_campos_obligatorios(self, obj):
+        """Campos obligatorios para Confirmar con esta configuración (incluye
+        los del destinatario solo si se exigen)."""
         from .services.obligatorios_service import para_configuracion
 
         return para_configuracion(obj)
@@ -144,6 +155,8 @@ class ConfiguracionDecaSerializer(serializers.ModelSerializer):
 
 
 class ConductorDecaSerializer(serializers.ModelSerializer):
+    """Ficha de conductor de la agenda. El NIF se normaliza y se valida con su
+    letra de control."""
     class Meta:
         model = ConductorDeca
         fields = ['id', 'nombre', 'nif', 'telefono', 'email', 'activo']
@@ -154,6 +167,8 @@ class ConductorDecaSerializer(serializers.ModelSerializer):
 
 
 class CargadorDecaSerializer(serializers.ModelSerializer):
+    """Ficha de cargador (quien contrata el transporte) de la agenda, con
+    domicilio: el art. 6.a de la Orden lo exige en el DeCA."""
     class Meta:
         model = CargadorDeca
         fields = ['id', 'nombre', 'nif', 'domicilio', 'telefono', 'email', 'activo']
@@ -164,6 +179,7 @@ class CargadorDecaSerializer(serializers.ModelSerializer):
 
 
 class EmpresaTransportistaDecaSerializer(serializers.ModelSerializer):
+    """Ficha de empresa transportista de la agenda."""
     class Meta:
         model = EmpresaTransportistaDeca
         fields = ['id', 'nombre', 'nif', 'telefono', 'email', 'activo']
@@ -174,6 +190,7 @@ class EmpresaTransportistaDecaSerializer(serializers.ModelSerializer):
 
 
 class DestinatarioDecaSerializer(serializers.ModelSerializer):
+    """Ficha de destinatario de la agenda."""
     class Meta:
         model = DestinatarioDeca
         fields = ['id', 'nombre', 'nif', 'telefono', 'email', 'activo']
@@ -184,6 +201,7 @@ class DestinatarioDecaSerializer(serializers.ModelSerializer):
 
 
 class TractoraDecaSerializer(serializers.ModelSerializer):
+    """Ficha de tractora de la agenda; la matrícula se normaliza y se valida."""
     class Meta:
         model = TractoraDeca
         fields = ['id', 'matricula', 'alias', 'activo']
@@ -194,6 +212,7 @@ class TractoraDecaSerializer(serializers.ModelSerializer):
 
 
 class RemolqueDecaSerializer(serializers.ModelSerializer):
+    """Ficha de remolque de la agenda; la matrícula se normaliza y se valida."""
     class Meta:
         model = RemolqueDeca
         fields = ['id', 'matricula', 'alias', 'activo']
@@ -204,6 +223,8 @@ class RemolqueDecaSerializer(serializers.ModelSerializer):
 
 
 class DocumentoOrigenDecaSerializer(serializers.ModelSerializer):
+    """Documento origen (albarán, CMR...) adjunto a una expedición, con quién
+    lo subió."""
     subido_por = serializers.SerializerMethodField()
 
     class Meta:
@@ -215,10 +236,13 @@ class DocumentoOrigenDecaSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'archivo', 'subido_por', 'fecha_alta']
 
     def get_subido_por(self, obj):
+        """Nombre legible de quien subió el documento."""
         return _nombre_usuario(obj.subido_por)
 
 
 class TransportistaSucesivoDecaSerializer(serializers.ModelSerializer):
+    """Transportista posterior en la cadena de subcontratación (plus sobre el
+    mínimo legal)."""
     class Meta:
         model = TransportistaSucesivoDeca
         fields = ['id', 'expedicion', 'orden', 'nif', 'nombre', 'matricula']
@@ -240,6 +264,8 @@ class TransportistaSucesivoDecaSerializer(serializers.ModelSerializer):
 
 
 class EventoExpedicionDecaSerializer(serializers.ModelSerializer):
+    """Evento del historial de auditoría, con el nombre del usuario que lo
+    provocó."""
     usuario = serializers.SerializerMethodField()
 
     class Meta:
@@ -248,10 +274,18 @@ class EventoExpedicionDecaSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_usuario(self, obj):
+        """Nombre legible del usuario del evento, o None si fue anónimo
+        (descarga pública por QR)."""
         return _nombre_usuario(obj.usuario)
 
 
 class ExpedicionDecaSerializer(serializers.ModelSerializer):
+    """Expedición completa. Valida el formato de NIF y matrículas solo cuando
+    hay algo escrito (un borrador puede nacer vacío), bloquea la edición
+    fuera de plazo de una expedición generada y protege los datos de un DeCA
+    hecho sin cobertura (referencia y fecha de emisión son la huella del
+    papel que viajó). Los campos calculados dicen a la pantalla qué puede
+    hacer."""
     creado_por = serializers.SerializerMethodField()
     documentos_origen = DocumentoOrigenDecaSerializer(many=True, read_only=True)
     transportistas_sucesivos = TransportistaSucesivoDecaSerializer(many=True, read_only=True)
@@ -286,14 +320,19 @@ class ExpedicionDecaSerializer(serializers.ModelSerializer):
         ]
 
     def get_creado_por(self, obj):
+        """Nombre legible de quien creó la expedición."""
         return _nombre_usuario(obj.creado_por)
 
     def get_acceso_publico_vigente(self, obj):
+        """Si el QR público todavía sirve el PDF sin login (ventana legal
+        configurada)."""
         return _acceso_publico_vigente(obj)
 
     def get_puede_editar(self, obj):
         # El frontend usa esto para decidir readOnly -- nunca vuelve a
         # calcular horas a mano, así config y frontend nunca divergen.
+        """Si la pantalla debe ofrecer editar: borrador/confirmado siempre;
+        generado solo dentro del plazo de corrección."""
         if obj.estado in (ExpedicionDeca.Estado.ANULADO, ExpedicionDeca.Estado.PAPEL):
             return False
         if obj.estado == ExpedicionDeca.Estado.GENERADO:
@@ -301,6 +340,8 @@ class ExpedicionDecaSerializer(serializers.ModelSerializer):
         return True
 
     def get_fecha_limite_edicion(self, obj):
+        """Hasta cuándo se puede corregir un DeCA ya generado (None si nunca se
+        generó)."""
         if obj.estado != ExpedicionDeca.Estado.GENERADO:
             return None
         return _fecha_limite_edicion(obj)
@@ -309,6 +350,7 @@ class ExpedicionDecaSerializer(serializers.ModelSerializer):
         # Usado por el frontend para decidir si una expedición ANULADA se
         # puede borrar (nunca llegó a generarse el DeCA oficial) o hay que
         # conservarla por auditoría (ver ExpedicionDecaDetailView.perform_destroy).
+        """Si existe el PDF oficial (decide si se puede borrar una anulada)."""
         return bool(obj.pdf_generado)
 
     def validate(self, attrs):
@@ -423,6 +465,8 @@ class PlantillaDocumentoDecaSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'veces_aplicada', 'ultima_vez_aplicada', 'sugerencias_valores_fijos']
 
     def get_sugerencias_valores_fijos(self, plantilla):
+        """Valores que se han repetido en los DeCA generados con este modelo y
+        que podrían pasar a ser fijos."""
         from deca.services.aprendizaje_service import sugerencias_valores_fijos
         return sugerencias_valores_fijos(plantilla) if plantilla.pk else []
 

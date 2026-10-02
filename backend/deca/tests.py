@@ -32,6 +32,10 @@ User = get_user_model()
 
 
 class DecaAPITestCase(APITestCase):
+    """Base de casi toda la suite: un administrador autenticado y utilidades
+    para crear PDF reales (con y sin capa de texto) y datos de expedición
+    válidos. Sus propios tests cubren el ciclo de vida completo de una
+    expedición, la extracción y la auditoría."""
     def setUp(self):
         self.empresa = None  # standalone: una instalación = una empresa
         self.user = User.objects.create_user(
@@ -588,7 +592,7 @@ class DecaAPITestCase(APITestCase):
         self.assertEqual(evento_reciente.ip_origen, '5.6.7.8')
 
     def test_listar_eventos_no_trunca_a_50_sin_paginar(self):
-        """Bug real ("Tarea 2", 2026-09-25): EventoExpedicionDecaListView no
+        """Bug real (2026-09-25): EventoExpedicionDecaListView no
         fijaba pagination_class, así que heredaba el PAGE_SIZE global (50) y
         el frontend pedía todos los eventos de golpe sin paginar -- un
         historial con más de 50 eventos perdía los más antiguos en
@@ -1199,7 +1203,7 @@ class ExportacionDecaTests(APITestCase):
     """Exportación PDF/Excel de Expediciones y de la Agenda -- pedido
     explícito del usuario 2026-09-24: paridad con buscar/ordenar/exportar
     del resto de módulos. Mismo filtro/orden que la pantalla (patrón
-    `buildParams`, ver CLAUDE.md)."""
+    de una sola función de filtros: lo exportado = lo que se ve)."""
 
     def setUp(self):
         self.empresa = None  # standalone: una instalación = una empresa

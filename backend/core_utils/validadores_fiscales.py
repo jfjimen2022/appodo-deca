@@ -35,6 +35,7 @@ def _letra_dni_correcta(numero_8):
 
 
 def validar_dni(valor):
+    """DNI español: 8 cifras y letra de control (módulo 23)."""
     v = normalizar(valor)
     if not _RE_DNI.match(v):
         return False
@@ -42,6 +43,8 @@ def validar_dni(valor):
 
 
 def validar_nie(valor):
+    """NIE de extranjero: X/Y/Z + 7 cifras + letra; la X/Y/Z se sustituye por
+    0/1/2 y se valida como un DNI."""
     v = normalizar(valor)
     if not _RE_NIE.match(v):
         return False
@@ -50,6 +53,8 @@ def validar_nie(valor):
 
 
 def validar_cif(valor):
+    """CIF de persona jurídica: letra de tipo de sociedad, 7 cifras y carácter
+    de control (cifra o letra según el tipo)."""
     v = normalizar(valor)
     if not _RE_CIF.match(v):
         return False

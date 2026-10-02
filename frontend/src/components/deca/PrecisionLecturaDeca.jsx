@@ -5,7 +5,7 @@ import { decaService } from '../../services/decaService'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card'
 
 // Cuánto acierta la lectura automática de documentos (fase 2 del aprendizaje,
-// apps/deca/services/aprendizaje_service.py::precision_lectura): % de datos
+// deca/services/aprendizaje_service.py::precision_lectura): % de datos
 // que nadie tuvo que corregir al generar el DeCA, en total, en lo manuscrito,
 // por campo y por modelo. Sirve para ver que las correcciones de la empresa
 // hacen que la IA lea mejor mes a mes.

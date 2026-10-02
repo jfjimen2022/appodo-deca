@@ -52,6 +52,8 @@ DATOS_MINIMOS_CONFIRMAR = {
 
 
 class DecaAPITestCase(APITestCase):
+    """Base: un administrador (is_staff) autenticado y un operador para probar
+    permisos."""
     def setUp(self):
         self.admin = User.objects.create_user(
             username='admin', email='admin@test.local', password='Admin123!', is_staff=True,
@@ -63,6 +65,9 @@ class DecaAPITestCase(APITestCase):
 
 
 class ConfiguracionDecaTests(DecaAPITestCase):
+    """La configuración es un singleton que se crea sola; el operador la lee
+    pero no la edita; el suelo legal de 7 días de visibilidad pública no se
+    puede bajar."""
     def test_se_crea_sola_con_valores_por_defecto(self):
         respuesta = self.client.get(reverse('deca-configuracion'))
         self.assertEqual(respuesta.status_code, status.HTTP_200_OK)
@@ -92,6 +97,8 @@ class ConfiguracionDecaTests(DecaAPITestCase):
 
 
 class ExpedicionCicloDeVidaTests(DecaAPITestCase):
+    """Ciclo de vida básico por la API: borrador → confirmado → generado →
+    anulado, y qué se puede editar o borrar en cada estado."""
     def _crear_borrador(self, **overrides):
         datos = {**DATOS_MINIMOS_CONFIRMAR, **overrides}
         respuesta = self.client.post(reverse('deca-expediciones'), datos, format='json')
@@ -220,6 +227,7 @@ class ExpedicionCicloDeVidaTests(DecaAPITestCase):
 
 
 class AgendaDecaTests(DecaAPITestCase):
+    """La agenda se alimenta sola al guardar expediciones y tiene CRUD propio."""
     def test_crud_destinatario(self):
         respuesta = self.client.post(
             reverse('deca-destinatarios'), {'nombre': 'Cliente Uno', 'nif': 'B12345674'}, format='json',
@@ -249,6 +257,7 @@ class AgendaDecaTests(DecaAPITestCase):
 
 
 class ImportarAgendaDecaTests(DecaAPITestCase):
+    """Importación CSV de la agenda: crea y actualiza por clave sin duplicar."""
     def test_importar_csv_crea_y_actualiza(self):
         csv_contenido = (
             'nombre,nif,telefono,email\r\n'
@@ -294,6 +303,8 @@ class ExtraccionRegexTests(APITestCase):
 
 
 class EnviarEmailExpedicionDecaTests(DecaAPITestCase):
+    """Envío manual por email: solo de un DeCA generado y con el SMTP de
+    settings."""
     def _generar_expedicion(self):
         respuesta = self.client.post(reverse('deca-expediciones'), DATOS_MINIMOS_CONFIRMAR, format='json')
         eid = respuesta.data['id']
@@ -325,6 +336,7 @@ class EnviarEmailExpedicionDecaTests(DecaAPITestCase):
 
 
 class PurgarIpsEventosDecaTests(DecaAPITestCase):
+    """La purga de IP respeta la retención configurada."""
     def test_purga_respeta_retencion_configurada(self):
         from django.core.management import call_command
         from django.utils import timezone

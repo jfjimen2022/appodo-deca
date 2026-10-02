@@ -24,6 +24,8 @@ NIF_ROMERO = 'A91000000'
 
 class AprendizajeLecturaDecaTests(DecaAPITestCase):
 
+    """La lectura aprende de las correcciones: sinónimos, corrección de
+    matrículas, pistas a la IA, valores fijos propuestos y precisión."""
     def _crear(self, **extra):
         crear = self.client.post('/api/v1/deca/expediciones/', {**self._datos_expedicion_validos(), **extra})
         self.assertEqual(crear.status_code, status.HTTP_201_CREATED, crear.data)

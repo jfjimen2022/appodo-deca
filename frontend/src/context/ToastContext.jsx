@@ -1,3 +1,5 @@
+// Avisos breves (toasts) de éxito/error/aviso/información para toda la app.
+// Se cierran solos (los errores duran más, para que dé tiempo a leerlos).
 import { createContext, useContext, useState, useCallback } from 'react'
 
 const ToastContext = createContext(null)

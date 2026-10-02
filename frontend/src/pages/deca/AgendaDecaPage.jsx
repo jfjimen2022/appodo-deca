@@ -1,3 +1,9 @@
+// Agenda: los seis catálogos reutilizables (cargadores, transportistas,
+// destinatarios, conductores, tractoras y remolques) más la pestaña de
+// sinónimos aprendidos por la lectura. Se rellenan solos al guardar
+// expediciones; aquí se corrigen, se archivan, se importan por CSV y se
+// exportan. Como "la agenda manda" sobre lo leído, un dato mal guardado aquí
+// se propagaría a los DeCA siguientes.
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { decaService } from '../../services/decaService'
@@ -21,7 +27,7 @@ import SortableHeader from '../../components/ui/SortableHeader'
 import SinonimosAprendidosDeca from '../../components/deca/SinonimosAprendidosDeca'
 import { useToast } from '../../context/ToastContext'
 
-// Los cuatro catálogos de DeCA en una sola pantalla. Se auto-alimentan al
+// Los catálogos de DeCA en una sola pantalla. Se auto-alimentan al
 // guardar expediciones, esto es para corregir una ficha mal escrita,
 // borrarla o darla de alta por adelantado.
 const CATALOGOS = [

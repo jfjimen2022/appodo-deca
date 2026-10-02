@@ -11,6 +11,8 @@ User = get_user_model()
 
 
 class UsuarioSerializer(serializers.ModelSerializer):
+    """Usuario de la instalación. La contraseña es de solo escritura y pasa por
+    los validadores de Django; obligatoria al crear, opcional al editar."""
     password = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
@@ -43,12 +45,14 @@ class UsuarioSerializer(serializers.ModelSerializer):
 
 
 class UsuarioListCreateView(generics.ListCreateAPIView):
+    """Lista y alta de usuarios (solo administradores)."""
     permission_classes = [IsAdminUser]
     serializer_class = UsuarioSerializer
     queryset = User.objects.all().order_by('username')
 
 
 class UsuarioDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Detalle, edición y baja de un usuario (solo administradores)."""
     permission_classes = [IsAdminUser]
     serializer_class = UsuarioSerializer
     queryset = User.objects.all()

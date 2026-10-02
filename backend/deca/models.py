@@ -1,3 +1,9 @@
+"""Modelos de DeCA (Documento de Control Administrativo del transporte de
+mercancías por carretera, Orden FOM/2861/2012 y Resolución de 5 de junio de
+2026). Patrón Active Record de Django: aquí solo hay datos y reglas simples;
+la lógica vive en services/. Single-tenant: ningún modelo cuelga de una
+Empresa (una instalación = una empresa) y la configuración es un singleton."""
+
 import os
 import uuid
 
@@ -45,12 +51,18 @@ def _ruta_pdf_deca(instance: 'ExpedicionDeca', nombre_archivo: str) -> str:
 
 
 class CanalNotificacion(models.TextChoices):
+    """Canal preferido para avisar a cada parte del transporte. Solo se guarda
+    la preferencia: el envío automático está sin construir (hoy el envío es
+    manual, por email)."""
     EMAIL = 'email', 'Email'
     SMS = 'sms', 'SMS'
     WHATSAPP = 'whatsapp', 'WhatsApp'
 
 
 class RolHabitualDeca(models.TextChoices):
+    """Papel habitual de la empresa en sus expediciones. La obligación del DeCA
+    es conjunta del cargador y del transportista (art. 4 y 7 de la Orden),
+    así que la usan los dos lados."""
     CARGADOR = 'cargador', 'Cargador (expide la mercancía)'
     TRANSPORTISTA = 'transportista', 'Transportista (realiza el transporte)'
 
@@ -182,6 +194,8 @@ class ConfiguracionDeca(models.Model):
     # interruptores independientes. Ver la leyenda de cada uno en
     # ConfiguracionDecaPage (bloque "Trabajo en campo").
     class ModoSinCobertura(models.TextChoices):
+        """Qué hace el móvil cuando no hay red. Son formas excluyentes de
+        resolver lo mismo, por eso se elige una sola."""
         IMPRIMIR = 'imprimir', 'Imprimir en el móvil'
         GENERAR_AL_VOLVER = 'generar_al_volver', 'Guardar y generar al volver la red'
         NECESITA_RED = 'necesita_red', 'Necesita red'
@@ -258,6 +272,8 @@ class ConfiguracionDeca(models.Model):
 
     @classmethod
     def get_solo(cls) -> 'ConfiguracionDeca':
+        """Devuelve la fila única de configuración, creándola con los valores
+        por defecto si la instalación aún no tiene ninguna."""
         config, _creada = cls.objects.get_or_create(pk=1)
         return config
 
@@ -271,6 +287,10 @@ class ExpedicionDeca(BaseModel):
     y pasa a GENERADO cuando el PDF final con QR ya existe."""
 
     class Estado(models.TextChoices):
+        """Ciclo de vida: borrador (editable) → confirmado (datos legales
+        completos) → generado (PDF y QR oficiales) → anulado. `papel` es un
+        DeCA del talonario registrado después por foto: no tiene PDF ni QR
+        propios."""
         BORRADOR = 'borrador', 'Borrador'
         CONFIRMADO = 'confirmado', 'Confirmado'
         GENERADO = 'generado', 'Generado'
@@ -419,6 +439,8 @@ class DocumentoOrigenDeca(BaseModel):
     como adjunto de auditoría aunque el DeCA ya se haya generado."""
 
     class TipoDocumento(models.TextChoices):
+        """Tipo de papel del que salen los datos. Orienta la lectura
+        automática; no cambia nada legal."""
         ALBARAN_VENTA = 'albaran_venta', 'Albarán de venta'
         CMR = 'cmr', 'CMR'
         OTRO = 'otro', 'Otro'
@@ -506,6 +528,8 @@ class EventoExpedicionDeca(BaseModel):
     edita ni se borra una fila de aquí (solo se crean)."""
 
     class TipoEvento(models.TextChoices):
+        """Todo lo que puede pasarle a una expedición y queda en su historial
+        de auditoría."""
         CREADA = 'creada', 'Expedición creada'
         DOCUMENTO_SUBIDO = 'documento_subido', 'Documento origen subido'
         VISTA_PREVIA = 'vista_previa', 'Vista previa generada'
@@ -738,6 +762,8 @@ class LecturaCampoDeca(BaseModel):
     """
 
     class Fuente(models.TextChoices):
+        """De dónde salió el valor propuesto para un campo; sirve para medir la
+        precisión de cada fuente."""
         IA = 'ia', 'Lectura de la IA'
         MODELO = 'modelo', 'Valor fijo del modelo de documento'
         AGENDA = 'agenda', 'Completado desde la Agenda'
@@ -788,6 +814,7 @@ class AliasAgendaDeca(BaseModel):
     MINIMO_CONFIRMACIONES = 2
 
     class Rol(models.TextChoices):
+        """A qué catálogo de la agenda apunta el sinónimo."""
         CARGADOR = 'cargador', 'Cargador'
         TRANSPORTISTA = 'transportista', 'Transportista'
         DESTINATARIO = 'destinatario', 'Destinatario'
@@ -822,4 +849,6 @@ class AliasAgendaDeca(BaseModel):
 
     @property
     def fiable(self) -> bool:
+        """True cuando el sinónimo se ha confirmado suficientes veces como para
+        rellenar el dato directamente en vez de solo proponerlo."""
         return self.veces_confirmado >= self.MINIMO_CONFIRMACIONES

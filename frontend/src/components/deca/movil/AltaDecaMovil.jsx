@@ -12,9 +12,8 @@ import {
 import { puedeInstalar, alCambiarInstalable, instalar } from '../../../lib/instalarApp'
 
 // Alta de DeCA en MÓVIL -- rediseño "Cámara + lista" con la pantalla de
-// comprobación final del modelo "Asistente por pasos" (elegido por el usuario
-// 2026-09-27 entre tres maquetas; ver docs/marketing/deca/README.md y la
-// maqueta navegable en docs/marketing/deca/maqueta-alta-movil-3-modelos.html).
+// comprobación final del modelo "Asistente por pasos" (elegido entre tres
+// maquetas, 2026-09-27).
 //
 // Quien da de alta un DeCA suele ser el trabajador del muelle, de pie y con
 // el sol reflejándose en la pantalla. De ahí las reglas de este componente,

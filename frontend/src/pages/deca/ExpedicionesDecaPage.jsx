@@ -1,3 +1,9 @@
+// Expediciones: pantalla principal. Listado paginado en servidor de todos los
+// DeCA con buscador, filtro por estado, columnas configurables y ordenables y
+// exportación a PDF/Excel con los mismos filtros (una sola función arma los
+// parámetros para el listado y para la exportación, así no divergen). Arriba,
+// los DeCA hechos sin cobertura en este móvil pendientes de registrar.
+// Tabla en escritorio y tarjetas en móvil, con las mismas acciones.
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'

@@ -1,3 +1,8 @@
+// Ficha de un DeCA generado, anulado o en papel: datos en solo lectura, QR y
+// enlace público, descarga del PDF, envío por email, corrección dentro del
+// plazo (con motivo obligatorio, Resolución de 5-jun-2026), anulación con
+// motivo e historial de auditoría exportable. Un borrador o una expedición
+// confirmada no tienen ficha: se abre directamente el formulario.
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'

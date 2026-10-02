@@ -22,6 +22,8 @@ class JWTCookieAuthentication(JWTAuthentication):
     desde JavaScript."""
 
     def authenticate(self, request):
+        """Usa la cabecera Authorization si viene (clientes de API) y si no, la
+        cookie HttpOnly `access_token` (el frontend)."""
         header = self.get_header(request)
         if header is not None:
             return super().authenticate(request)

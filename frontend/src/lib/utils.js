@@ -1,3 +1,6 @@
+// Utilidades compartidas de UI: `cn` combina clases de Tailwind sin
+// conflictos y `formatDate` muestra una fecha en hora de España (o la zona
+// indicada), aceptando tanto `YYYY-MM-DD` como fechas ISO completas.
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 

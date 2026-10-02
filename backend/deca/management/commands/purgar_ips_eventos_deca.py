@@ -1,3 +1,8 @@
+"""Comando programado (servicio `scheduler` del docker-compose): borra las IP
+de las descargas públicas por QR más antiguas que la retención configurada.
+Minimización de datos (RGPD): la IP solo hace falta mientras pueda servir
+para investigar un acceso."""
+
 import logging
 from datetime import timedelta
 

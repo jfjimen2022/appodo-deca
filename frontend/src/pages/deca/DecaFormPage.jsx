@@ -1,3 +1,10 @@
+// Alta y edición de una expedición DeCA. En escritorio, formulario por
+// bloques (cargador, transportista, destinatario, vehículo, ruta, mercancía,
+// conductor) con contador de obligatorios, buscador de agenda y documentos
+// origen con lectura automática; en móvil delega en AltaDecaMovil (foto →
+// lo que falta → comprobar → QR). También gestiona el trabajo SIN COBERTURA:
+// agenda y configuración guardadas en el móvil, cola de DeCA pendientes e
+// impresión con QR generado en el propio móvil (lib/decaOffline.js).
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -36,7 +43,7 @@ const TIPOS_DOCUMENTO = ['albaran_venta', 'cmr', 'otro']
 
 // Valor mientras llega la configuración: el de fábrica del backend (la norma
 // no exige nada del destinatario). La lista REAL la manda el servidor en
-// `configuracion.campos_obligatorios` (apps/deca/services/obligatorios_service.py),
+// `configuracion.campos_obligatorios` (deca/services/obligatorios_service.py),
 // según `exigir_datos_destinatario` -- nunca se decide aquí por separado.
 // Orden FOM/2861/2012 art. 6 vigente (revisado con el BOE 2026-09-30):
 // también domicilio del cargador, remolque (salvo camión rígido) y peso; los
@@ -1107,7 +1114,7 @@ export default function DecaFormPage() {
   // "leyó el documento y no encontró nada". Antes ambos casos enseñaban el
   // mensaje de "foto borrosa", y el usuario buscaba el problema en la foto o
   // en el móvil cuando era la cuota de Gemini (2026-09-25). El motivo viene
-  // ya redactado del backend (core/ai.py).
+  // ya redactado del backend (deca/services/ai_client.py).
   const avisarIANoDisponible = (motivo) => {
     toast.error(`${t('expedicion.ia_no_disponible', 'La IA no ha podido leer el documento.')} ${motivo}`, 12000)
   }
@@ -1270,7 +1277,7 @@ export default function DecaFormPage() {
 
   // ── Alta desde el MÓVIL (components/deca/movil/AltaDecaMovil.jsx) ─────────
   // Pantalla propia a pantalla completa, pensada para el muelle a pleno sol
-  // (rediseño elegido por el usuario 2026-09-27, ver docs/marketing/deca/).
+  // (rediseño elegido entre tres maquetas, 2026-09-27).
   // Reutiliza TODO el estado y los handlers de esta página -- solo cambia la
   // presentación. Corregir un DeCA ya generado o verlo en solo lectura sigue
   // usando el formulario de siempre, que ya se adapta a móvil.

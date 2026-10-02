@@ -33,11 +33,15 @@ CAMPOS_DESTINATARIO = ('nif_destinatario', 'nombre_destinatario')
 
 
 def para_configuracion(config) -> list[str]:
+    """Lista efectiva de obligatorios con una configuración ya cargada."""
     exigir = bool(config and config.exigir_datos_destinatario)
     return [c for c in CAMPOS_OBLIGATORIOS_PARA_CONFIRMAR if exigir or c not in CAMPOS_DESTINATARIO]
 
 
 def para_empresa(empresa) -> list[str]:
+    """Lista efectiva de obligatorios leyendo la configuración de la
+    instalación. El parámetro `empresa` se conserva por compatibilidad con
+    el ERP origen y se ignora (single-tenant)."""
     from deca.models import ConfiguracionDeca
 
     config = ConfiguracionDeca.objects.filter(pk=1).only('exigir_datos_destinatario').first()

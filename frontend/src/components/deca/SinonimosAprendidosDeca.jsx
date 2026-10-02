@@ -13,7 +13,7 @@ import {
 // Pestaña "Sinónimos aprendidos" de la Agenda de DeCA: cómo aparece escrita
 // en los documentos cada ficha ("TTES ROMERO" = Transportes Romero Ruiz
 // S.L.). Se aprenden solos al generar DeCA en los que alguien corrigió lo que
-// leyó la IA (apps/deca/services/aprendizaje_service.py); aquí solo se
+// leyó la IA (deca/services/aprendizaje_service.py); aquí solo se
 // consultan y se olvidan los que estén mal. Fase 1 del aprendizaje, 2026-09-28.
 const ROLES = ['', 'transportista', 'cargador', 'destinatario', 'conductor', 'tractora', 'remolque']
 

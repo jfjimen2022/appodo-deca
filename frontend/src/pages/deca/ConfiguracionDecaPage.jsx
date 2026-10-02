@@ -1,3 +1,8 @@
+// Configuración de DeCA (solo administradores): papel de la empresa,
+// referencia de la expedición, acceso público y plazo de corrección,
+// notificaciones, "la agenda manda", trabajo en campo sin cobertura, cabecera
+// de documento controlado, plantilla del email, modelos de documento y
+// precisión de lectura. Una sola fila en el servidor (singleton).
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -184,7 +189,7 @@ export default function ConfiguracionDecaPage() {
           otras no tienen ningún número externo propio y necesitan que
           Appodo numere por ellas. Decide qué se usa en el asunto del email,
           el nombre del PDF y el título del historial de auditoría -- ver
-          apps/deca/services/identificador_service.py. */}
+          deca/services/identificador_service.py. */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">

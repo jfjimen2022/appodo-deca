@@ -1,3 +1,8 @@
+"""Vistas DRF de DeCA: capa HTTP fina sobre services/. Permisos single-tenant:
+cualquier usuario autenticado trabaja con expediciones y agenda; editar la
+configuración y gestionar usuarios es solo de `is_staff`. La descarga
+pública por QR es la única vista sin login, con su propio límite de ritmo."""
+
 import csv
 import io
 import logging
@@ -119,6 +124,9 @@ def _texto_dato(valor) -> str:
 
 
 class DecaLecturaPublicaThrottle(AnonRateThrottle):
+    """Límite de ritmo propio de la descarga pública por QR (scope
+    `deca_publico`), separado del genérico de anónimos: es la única puerta
+    sin login."""
     scope = 'deca_publico'
 
 
@@ -144,6 +152,9 @@ class ConfiguracionDecaView(generics.RetrieveUpdateAPIView):
 # ─── Expediciones (CRUD) ────────────────────────────────────────────────────
 
 class ExpedicionDecaListCreateView(generics.ListCreateAPIView):
+    """GET lista paginada, filtrable y ordenable de expediciones; POST crea una
+    (borrador). Al crear desde un móvil que estuvo sin cobertura adopta el
+    token del QR que ya va impreso en el papel."""
     permission_classes = DECA_PERMS
     serializer_class = ExpedicionDecaSerializer
     filter_backends = [OrderingFilter]
@@ -211,6 +222,11 @@ class ExpedicionDecaListCreateView(generics.ListCreateAPIView):
 
 
 class ExpedicionDecaDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Detalle, edición y borrado de una expedición. Una edición guarda en el
+    historial qué campos cambiaron; si la expedición ya estaba generada,
+    exige motivo, deja constancia en ModificacionDeca y regenera el PDF con
+    la sección de modificaciones (Resolución de 5-jun-2026). Solo se borran
+    borradores o anuladas sin PDF oficial."""
     permission_classes = DECA_PERMS
     serializer_class = ExpedicionDecaSerializer
     queryset = ExpedicionDeca.objects.all()
@@ -338,6 +354,7 @@ class _CatalogoDecaListCreateView(generics.ListCreateAPIView):
 
 
 class _CatalogoDecaDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Base del detalle/edición/borrado de una ficha de la agenda."""
     permission_classes = DECA_PERMS
     modelo = None
 
@@ -346,46 +363,55 @@ class _CatalogoDecaDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class ConductorDecaListView(_CatalogoDecaListCreateView):
+    """Catálogo de conductores."""
     serializer_class = ConductorDecaSerializer
     modelo = ConductorDeca
 
 
 class ConductorDecaDetailView(_CatalogoDecaDetailView):
+    """Ficha de un conductor."""
     serializer_class = ConductorDecaSerializer
     modelo = ConductorDeca
 
 
 class EmpresaTransportistaDecaListView(_CatalogoDecaListCreateView):
+    """Catálogo de empresas transportistas."""
     serializer_class = EmpresaTransportistaDecaSerializer
     modelo = EmpresaTransportistaDeca
 
 
 class EmpresaTransportistaDecaDetailView(_CatalogoDecaDetailView):
+    """Ficha de una empresa transportista."""
     serializer_class = EmpresaTransportistaDecaSerializer
     modelo = EmpresaTransportistaDeca
 
 
 class DestinatarioDecaListView(_CatalogoDecaListCreateView):
+    """Catálogo de destinatarios."""
     serializer_class = DestinatarioDecaSerializer
     modelo = DestinatarioDeca
 
 
 class DestinatarioDecaDetailView(_CatalogoDecaDetailView):
+    """Ficha de un destinatario."""
     serializer_class = DestinatarioDecaSerializer
     modelo = DestinatarioDeca
 
 
 class CargadorDecaListView(_CatalogoDecaListCreateView):
+    """Catálogo de cargadores (quien contrata el transporte)."""
     serializer_class = CargadorDecaSerializer
     modelo = CargadorDeca
 
 
 class CargadorDecaDetailView(_CatalogoDecaDetailView):
+    """Ficha de un cargador."""
     serializer_class = CargadorDecaSerializer
     modelo = CargadorDeca
 
 
 class TractoraDecaListView(_CatalogoDecaListCreateView):
+    """Catálogo de tractoras."""
     serializer_class = TractoraDecaSerializer
     modelo = TractoraDeca
     campo_busqueda = 'matricula'
@@ -394,11 +420,13 @@ class TractoraDecaListView(_CatalogoDecaListCreateView):
 
 
 class TractoraDecaDetailView(_CatalogoDecaDetailView):
+    """Ficha de una tractora."""
     serializer_class = TractoraDecaSerializer
     modelo = TractoraDeca
 
 
 class RemolqueDecaListView(_CatalogoDecaListCreateView):
+    """Catálogo de remolques."""
     serializer_class = RemolqueDecaSerializer
     modelo = RemolqueDeca
     campo_busqueda = 'matricula'
@@ -407,6 +435,7 @@ class RemolqueDecaListView(_CatalogoDecaListCreateView):
 
 
 class RemolqueDecaDetailView(_CatalogoDecaDetailView):
+    """Ficha de un remolque."""
     serializer_class = RemolqueDecaSerializer
     modelo = RemolqueDeca
 
@@ -437,6 +466,8 @@ class TransportistaSucesivoListCreateView(generics.ListCreateAPIView):
 
 
 class TransportistaSucesivoDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Edición/borrado de un eslabón de la cadena de subcontratación; solo
+    mientras la expedición está en borrador."""
     permission_classes = DECA_PERMS
     serializer_class = TransportistaSucesivoDecaSerializer
     queryset = TransportistaSucesivoDeca.objects.all()
@@ -504,10 +535,12 @@ class _ExportarAuditoriaExpedicionDecaView(APIView):
 
 
 class ExportarPDFAuditoriaExpedicionDecaView(_ExportarAuditoriaExpedicionDecaView):
+    """Informe de auditoría de una expedición en PDF."""
     formato = 'pdf'
 
 
 class ExportarExcelAuditoriaExpedicionDecaView(_ExportarAuditoriaExpedicionDecaView):
+    """Informe de auditoría de una expedición en Excel."""
     formato = 'excel'
 
 
@@ -559,12 +592,14 @@ class AliasAgendaDecaDetailView(generics.DestroyAPIView):
 
 
 class PlantillaDocumentoDecaListView(_CatalogoDecaListCreateView):
+    """Modelos de documento de la empresa (lista y alta)."""
     serializer_class = PlantillaDocumentoDecaSerializer
     modelo = PlantillaDocumentoDeca
     ordering_fields = ['nombre', 'tipo_documento', 'veces_aplicada', 'ultima_vez_aplicada']
 
 
 class PlantillaDocumentoDecaDetailView(_CatalogoDecaDetailView):
+    """Un modelo de documento (detalle, edición, borrado)."""
     serializer_class = PlantillaDocumentoDecaSerializer
     modelo = PlantillaDocumentoDeca
 
@@ -1236,6 +1271,9 @@ def _nombre_empresa() -> str:
 
 
 class _ExportarExpedicionesDecaView(APIView):
+    """Base de la exportación del listado de expediciones. Reutiliza el
+    queryset y los filtros de la vista del listado, así lo exportado es
+    exactamente lo que se ve en pantalla."""
     permission_classes = DECA_PERMS
     formato = None  # 'pdf' | 'excel'
 
@@ -1266,10 +1304,12 @@ class _ExportarExpedicionesDecaView(APIView):
 
 
 class ExportarPDFExpedicionesDecaView(_ExportarExpedicionesDecaView):
+    """Listado de expediciones en PDF."""
     formato = 'pdf'
 
 
 class ExportarExcelExpedicionesDecaView(_ExportarExpedicionesDecaView):
+    """Listado de expediciones en Excel."""
     formato = 'excel'
 
 
@@ -1284,6 +1324,8 @@ _MODELOS_AGENDA = {
 
 
 class _ExportarAgendaDecaView(APIView):
+    """Base de la exportación de un catálogo de la agenda; mismo criterio que
+    las expediciones (lo exportado = lo filtrado)."""
     permission_classes = DECA_PERMS
     formato = None  # 'pdf' | 'excel'
 
@@ -1317,10 +1359,12 @@ class _ExportarAgendaDecaView(APIView):
 
 
 class ExportarPDFAgendaDecaView(_ExportarAgendaDecaView):
+    """Catálogo de la agenda en PDF."""
     formato = 'pdf'
 
 
 class ExportarExcelAgendaDecaView(_ExportarAgendaDecaView):
+    """Catálogo de la agenda en Excel."""
     formato = 'excel'
 
 
@@ -1342,6 +1386,11 @@ _CATALOGOS_IMPORTABLES = {
 
 
 class ImportarAgendaDecaView(APIView):
+    """POST /api/v1/deca/agenda/<tipo>/importar-csv/ -- alta masiva de un
+    catálogo desde CSV. Cada fila pasa por el mismo serializer que el alta a
+    mano (mismas validaciones de NIF/matrícula); si la clave (NIF o
+    matrícula) ya existe se actualiza en vez de duplicarse, y una fila mala
+    se informa sin romper las demás."""
     permission_classes = DECA_PERMS
     parser_classes = [MultiPartParser, FormParser]
 

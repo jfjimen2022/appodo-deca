@@ -16,6 +16,9 @@ from reportlab.pdfgen import canvas
 
 
 class NumberedCanvas(canvas.Canvas):
+    """Canvas de reportlab que numera «Página X de Y». El total no se conoce
+    hasta terminar, así que guarda el estado de cada página y las dibuja
+    todas al final (patrón estándar de dos pasadas)."""
     def __init__(self, *args, **kwargs):
         canvas.Canvas.__init__(self, *args, **kwargs)
         self._saved_page_states = []

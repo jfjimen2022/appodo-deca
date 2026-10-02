@@ -1,3 +1,7 @@
+"""Admin de Django para soporte técnico: permite inspeccionar expediciones,
+catálogos y lo aprendido por la lectura. El uso normal es siempre desde el
+frontend; el historial de eventos es de solo lectura aquí también."""
+
 from django.contrib import admin
 
 from .models import (
@@ -21,6 +25,9 @@ from .models import (
 
 @admin.register(ExpedicionDeca)
 class ExpedicionDecaAdmin(admin.ModelAdmin):
+    """Listado de expediciones con búsqueda por número y NIF. Token, hash y
+    fechas de generación son de solo lectura: los pone el sistema al generar
+    y alterarlos rompería la verificación pública del QR."""
     list_display = ('numero_albaran', 'estado', 'nombre_cargador', 'nombre_transportista', 'nombre_destinatario', 'fecha_alta')
     list_filter = ('estado',)
     search_fields = ('numero_albaran', 'numero_cmr', 'nif_cargador', 'nif_transportista', 'nif_destinatario')
@@ -29,6 +36,9 @@ class ExpedicionDecaAdmin(admin.ModelAdmin):
 
 @admin.register(EventoExpedicionDeca)
 class EventoExpedicionDecaAdmin(admin.ModelAdmin):
+    """Historial de auditoría en modo solo lectura: es append-only por diseño
+    (prueba ante una inspección o un litigio), así que ni se crea ni se
+    edita ni se borra desde el admin."""
     list_display = ('expedicion', 'tipo_evento', 'usuario', 'fecha_alta')
     list_filter = ('tipo_evento',)
     readonly_fields = [f.name for f in EventoExpedicionDeca._meta.fields]

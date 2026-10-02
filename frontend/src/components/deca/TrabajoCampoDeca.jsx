@@ -8,7 +8,7 @@ import { Switch } from '../ui/switch'
 // Configuración de DeCA → "Trabajo en campo y sin cobertura" (2026-09-30).
 // El MODO sin cobertura es uno solo (son formas excluyentes de resolver lo
 // mismo: radio). El resto son interruptores independientes (una tarjeta
-// cada uno, ver CLAUDE.md "Layout responsive en páginas de configuración").
+// cada uno, en rejilla para no apilar una sola columna kilométrica).
 // Cada opción lleva su explicación y abajo va una leyenda común: la pidió el
 // usuario explícitamente, porque quien configura esto no es quien está en
 // la finca y tiene que entender qué va a pasar allí.

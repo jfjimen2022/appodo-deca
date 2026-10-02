@@ -1,3 +1,10 @@
+"""Rutas de la API de DeCA (/api/v1/deca/...): configuración, expediciones y su
+ciclo de vida (confirmar, vista previa, generar, anular, registrar papel,
+enviar por email), documentos origen y extracción, agenda (seis catálogos,
+importación y exportación), sinónimos aprendidos, modelos de documento,
+precisión de lectura, auditoría, descarga pública por QR y gestión de
+usuarios."""
+
 from django.urls import path
 
 from . import views, views_usuarios

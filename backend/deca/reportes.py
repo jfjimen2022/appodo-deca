@@ -23,6 +23,8 @@ def _fecha_legible(dt):
 # ─── Expediciones ────────────────────────────────────────────────────────
 
 def resumen_filtros_legible_expediciones(filtros: dict | None) -> str:
+    """Texto humano de los filtros aplicados al listado de expediciones, para
+    la cabecera del informe."""
     if not filtros:
         return 'Sin filtros aplicados'
     partes = []
@@ -69,6 +71,8 @@ def _valor_columna_expedicion(col_id, e):
 
 
 def generar_pdf_expediciones(expediciones, empresa_nombre, config=None, generado_por=None, filtros=None) -> bytes:
+    """PDF apaisado del listado de expediciones, paginado («Página X de Y») y
+    con la cabecera de documento controlado si la configuración la activa."""
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.platypus import SimpleDocTemplate, Table, Paragraph, Spacer
@@ -126,6 +130,8 @@ def generar_pdf_expediciones(expediciones, empresa_nombre, config=None, generado
 
 
 def generar_excel_expediciones(expediciones, empresa_nombre='', config=None, generado_por=None, filtros=None) -> bytes:
+    """Excel del listado de expediciones con las mismas columnas y cabecera que
+    el PDF."""
     return _generar_excel_generico(
         expediciones, 'Expediciones', COLUMNAS_EXPEDICIONES, ORDEN_COLUMNAS_EXPEDICIONES,
         _valor_columna_expedicion, empresa_nombre, config, generado_por,
@@ -188,6 +194,7 @@ COLUMNAS_AGENDA = {
 
 
 def resumen_filtros_legible_agenda(filtros: dict | None) -> str:
+    """Texto humano de los filtros aplicados a un catálogo de la agenda."""
     if not filtros:
         return 'Sin filtros aplicados'
     partes = []
@@ -206,6 +213,7 @@ def _valor_columna_agenda(col_id, ficha):
 
 
 def generar_pdf_agenda(tipo, fichas, empresa_nombre, config=None, generado_por=None, filtros=None) -> bytes:
+    """PDF de un catálogo de la agenda (columnas según el tipo de ficha)."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.platypus import SimpleDocTemplate, Table, Paragraph, Spacer
@@ -266,6 +274,7 @@ def generar_pdf_agenda(tipo, fichas, empresa_nombre, config=None, generado_por=N
 
 
 def generar_excel_agenda(tipo, fichas, empresa_nombre='', config=None, generado_por=None, filtros=None) -> bytes:
+    """Excel de un catálogo de la agenda."""
     columnas_def = COLUMNAS_AGENDA[tipo]
     return _generar_excel_generico(
         fichas, TITULOS_AGENDA[tipo], columnas_def, list(columnas_def.keys()),
@@ -318,6 +327,8 @@ def _titulo_auditoria(expedicion, config=None) -> str:
 
 
 def generar_pdf_auditoria_expedicion(expedicion, eventos, empresa_nombre, config=None, generado_por=None) -> bytes:
+    """Informe de auditoría de una expedición en PDF: todos sus eventos con
+    fecha, usuario, detalle y hash del documento en ese momento."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.platypus import SimpleDocTemplate, Table, Paragraph, Spacer
@@ -373,6 +384,7 @@ def generar_pdf_auditoria_expedicion(expedicion, eventos, empresa_nombre, config
 
 
 def generar_excel_auditoria_expedicion(expedicion, eventos, empresa_nombre='', config=None, generado_por=None) -> bytes:
+    """Informe de auditoría de una expedición en Excel."""
     return _generar_excel_generico(
         eventos, _titulo_auditoria(expedicion, config), COLUMNAS_AUDITORIA, ORDEN_COLUMNAS_AUDITORIA,
         _valor_columna_auditoria, empresa_nombre, config, generado_por,

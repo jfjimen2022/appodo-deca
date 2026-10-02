@@ -1,3 +1,5 @@
+// Punto de entrada del frontend: monta la app, carga i18n y estilos, y
+// registra el service worker en producción (ver el final del fichero).
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'

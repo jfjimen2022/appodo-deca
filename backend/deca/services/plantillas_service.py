@@ -16,7 +16,7 @@ instrucciones para la IA, que es la que lee escaneos y fotos:
   se valida contra la lista -- nunca se usa un id que venga de la IA.
 
 Todo es sugerencia: el usuario revisa el formulario antes de confirmar
-(CLAUDE.md, capa de IA aislada)."""
+(la IA sugiere, nunca escribe en la expedición)."""
 from __future__ import annotations
 
 import unicodedata
@@ -44,10 +44,13 @@ def _normalizar(texto: str) -> str:
 
 
 def palabras_identificativas(plantilla) -> list[str]:
+    """Palabras (separadas por comas) que deben aparecer en el texto para
+    reconocer este modelo."""
     return [p for p in (_normalizar(x) for x in (plantilla.texto_identificativo or '').split(',')) if p]
 
 
 def plantillas_activas(empresa) -> list:
+    """Modelos de documento activos. `empresa` se ignora (single-tenant)."""
     from deca.models import PlantillaDocumentoDeca
 
     return list(
@@ -100,6 +103,9 @@ def _describir(plantilla) -> str:
 
 
 def pistas_modelo_detectado(plantilla) -> str:
+    """Bloque de instrucciones para la IA cuando ya se sabe de qué modelo es el
+    documento: sus instrucciones propias y ejemplos de errores ya corregidos
+    en él."""
     return (
         'Este documento es de un modelo que la empresa ya conoce. Sigue estas '
         'indicaciones, tienen prioridad sobre las reglas generales:\n' + _describir(plantilla)
@@ -141,6 +147,8 @@ def aplicar_valores_fijos(plantilla, campos: dict | None) -> dict:
 
 
 def registrar_uso(plantilla) -> None:
+    """Cuenta un uso más del modelo y la fecha, para ordenar y depurar los
+    modelos en Configuración."""
     from django.db.models import F
 
     type(plantilla).objects.filter(pk=plantilla.pk).update(

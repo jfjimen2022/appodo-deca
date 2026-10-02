@@ -1,3 +1,6 @@
+// Inicio de sesión con usuario y contraseña. La sesión va en cookies
+// HttpOnly que pone el backend (deca/auth_views.py): aquí no se guarda ningún
+// token en JS. Tras entrar vuelve a la ruta que se intentaba abrir.
 import { useState } from 'react'
 import { useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'

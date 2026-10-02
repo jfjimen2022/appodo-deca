@@ -1,3 +1,7 @@
+// Cliente de la API de DeCA (/api/v1/deca/...) sobre la instancia axios
+// común (services/api.js, cookies HttpOnly). Una función por endpoint; las
+// exportaciones PDF/Excel se descargan como fichero con la fecha en el nombre
+// y, si el servidor falla, enseñan su mensaje en vez de un blob ilegible.
 import api from './api'
 
 // Descarga un blob de exportación (PDF/Excel) y lanza el `<a download>` --

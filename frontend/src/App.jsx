@@ -1,3 +1,6 @@
+// Rutas de la aplicación: login público y, tras PrivateRoute, el shell
+// (Layout) con Expediciones, Nuevo DeCA, Agenda y ficha de detalle;
+// Configuración y Usuarios además tras AdminRoute (solo is_staff).
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'

@@ -1,3 +1,8 @@
+"""Rutas raíz del proyecto: admin de Django, autenticación JWT en cookies
+HttpOnly (/api/v1/auth/...), el endpoint /auth/me/ con el usuario y la
+empresa de la instalación, y todas las rutas de DeCA bajo /api/v1/
+(deca/urls.py). En DEBUG sirve además /media/."""
+
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin

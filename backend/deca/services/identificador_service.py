@@ -8,8 +8,8 @@ externo propio y necesitar que Appodo numere por ella).
 Toda la lógica vive AQUÍ -- antes de esto, `expedicion.numero_albaran or
 str(expedicion.id)` estaba duplicado en email_service.py, pdf_service.py,
 views.py (x3) y reportes.py; si mañana cambia el criterio, es un único sitio
-que tocar (mismo principio que `buildParams` en los listados, ver
-CLAUDE.md)."""
+que tocar (una sola función para un mismo criterio: si se copia en dos
+sitios, acaba divergiendo)."""
 import re
 
 from ..models import ConfiguracionDeca, ExpedicionDeca, IdentificadorExpedicionDeca
@@ -26,6 +26,8 @@ _CARACTERES_INVALIDOS_ARCHIVO = re.compile(r'[\\/:*?"<>|]')
 
 
 def obtener_configuracion(expedicion: ExpedicionDeca) -> ConfiguracionDeca | None:
+    """Configuración de la instalación, o None si aún no existe la fila (se
+    usan los valores por defecto)."""
     return ConfiguracionDeca.objects.filter(pk=1).first()
 
 

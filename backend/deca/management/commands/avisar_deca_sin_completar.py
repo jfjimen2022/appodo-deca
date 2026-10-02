@@ -1,3 +1,7 @@
+"""Comando programado (servicio `scheduler` del docker-compose): avisa por
+email a los administradores de los DeCA hechos sin cobertura que llegaron al
+servidor sin poder generarse. Ver la clase Command."""
+
 import logging
 from datetime import timedelta
 

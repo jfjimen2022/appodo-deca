@@ -13,6 +13,8 @@ from .tests import DecaAPITestCase
 
 class PlantillasDocumentoDecaTests(DecaAPITestCase):
 
+    """Modelos de documento: CRUD validado, reconocimiento por texto o por la
+    IA y aplicación de sus valores fijos."""
     def _crear_plantilla(self, **extra):
         datos = {
             'nombre': 'Albarán Frutas del Sur', 'tipo_documento': 'albaran_venta',

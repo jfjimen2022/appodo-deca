@@ -1,9 +1,9 @@
 // DeCA SIN COBERTURA (2026-09-30): el responsable de finca da de alta el DeCA
 // en el móvil sin red, lo imprime allí mismo (el documento tiene que viajar
 // en el camión, Orden FOM/2861/2012 art. 3) y al volver la cobertura se
-// registra solo en Appodo.
+// registra solo en el servidor.
 //
-// Dos almacenes, con las reglas de CLAUDE.md para cachés sin conexión:
+// Dos almacenes, con reglas distintas porque protegen cosas distintas:
 // - `cache`: lo que hace falta para rellenar sin red (obligatorios de la
 //   empresa, agenda). Clave por EMPRESA y USUARIO, y se BORRA al cerrar
 //   sesión (limpiarCacheDeca) -- nunca se sirve a otra empresa.

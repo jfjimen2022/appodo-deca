@@ -1,3 +1,5 @@
+// Traducciones (i18next): español por defecto e inglés, con los espacios de
+// nombres `common` y `deca`. El idioma elegido se recuerda en este navegador.
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import deca_es from './locales/es/deca.json'

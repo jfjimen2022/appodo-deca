@@ -1,5 +1,5 @@
 """Modelo base mínimo replicado de `core/models.py` del ERP -- solo la parte
-que `apps/deca` necesita. `TenantModel` (FK a Empresa) NO se replica: en el
+que `deca` necesita (en el ERP origen, `apps/deca`). `TenantModel` (FK a Empresa) NO se replica: en el
 standalone no hay multi-tenant, así que los modelos de deca pierden esa FK
 directamente en vez de heredar de un equivalente vacío."""
 import uuid

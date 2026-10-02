@@ -308,7 +308,7 @@ export default function PlantillasDocumentoDeca() {
             </div>
 
             {/* Propuestas de valores fijos -- fase 2 del aprendizaje
-                (apps/deca/services/aprendizaje_service.py): datos que han
+                (deca/services/aprendizaje_service.py): datos que han
                 salido iguales en los últimos DeCA de un modelo. Nunca se
                 aplican solos: los fija el administrador con un clic.
                 Bloque único para tabla y tarjetas, no se duplica. */}
