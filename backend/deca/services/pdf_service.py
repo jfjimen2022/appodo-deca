@@ -9,6 +9,8 @@ el documento desde cero es la forma más segura de no caer en esa prohibición.
 from __future__ import annotations
 
 import io
+from datetime import timezone as dt_timezone
+from xml.sax.saxutils import escape
 
 from django.conf import settings
 from django.utils import timezone
@@ -20,6 +22,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.platypus import HRFlowable, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from deca.models import ExpedicionDeca
+from deca.services import identificador_service
 
 TAMANO_QR_MM = 32
 MARGEN_MM = 15
@@ -111,9 +114,15 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
         Contenido del PDF en bytes.
     """
     # `title` fija el metadato /Title del PDF -- sin él, el visor del
-    # navegador le pone a la pestaña un nombre genérico en vez del número
-    # de DeCA.
-    identificador = expedicion.numero_albaran or str(expedicion.id)
+    # navegador le pone a la pestaña un nombre genérico (salía
+    # "anonymous") en vez del número de DeCA.
+    # Saneado (no `identificador_expedicion` a secas): esto es el metadato
+    # /Title del PDF, que algunos visores (el de Chrome integrado, usado en
+    # la vista previa que se abre como blob sin Content-Disposition) usan
+    # como nombre sugerido al pulsar "Guardar" -- con una "/" en el
+    # identificador (ej. numero_albaran "ALN26/1234") el navegador la trataba
+    # como separador de carpetas y proponía solo "1234.pdf".
+    identificador = identificador_service.identificador_expedicion_para_archivo(expedicion)
     titulo_documento = f'{"VISTA PREVIA " if borrador else ""}DECA-{identificador}'
     empresa_nombre = _nombre_empresa()
 
@@ -181,7 +190,9 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
     datos = [
         ['Cargador', 'Transportista efectivo', 'Destinatario'],
         [
-            f'{expedicion.nombre_cargador}\nNIF/CIF: {expedicion.nif_cargador}',
+            # Domicilio del cargador: art. 6.a de la Orden FOM/2861/2012.
+            f'{expedicion.nombre_cargador}\nNIF/CIF: {expedicion.nif_cargador}'
+            + (f'\n{expedicion.domicilio_cargador}' if expedicion.domicilio_cargador else ''),
             f'{expedicion.nombre_transportista}\nNIF/CIF: {expedicion.nif_transportista}',
             f'{expedicion.nombre_destinatario}\nNIF/CIF: {expedicion.nif_destinatario}',
         ],
@@ -202,6 +213,9 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
     elementos.append(Spacer(1, 6 * mm))
 
     peso_texto = f'{expedicion.peso_kg} kg' if expedicion.peso_kg is not None else '—'
+    # DeCA anticipado: el peso es el previsto hasta que se corrige con el real.
+    if expedicion.peso_estimado and expedicion.peso_kg is not None:
+        peso_texto += ' (estimado)'
     bultos_texto = str(expedicion.bultos) if expedicion.bultos is not None else '—'
     # `fecha_hora_transporte` es null=True desde que el borrador puede nacer
     # vacío (ver ExpedicionDeca en models.py) -- la vista previa debe poder
@@ -212,8 +226,10 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
     )
 
     filas_transporte = [
-        _fila('Matrícula tractor', expedicion.matricula_tractor),
-        _fila('Matrícula remolque', expedicion.matricula_remolque),
+        _fila('Matrícula vehículo / tractora', expedicion.matricula_tractor),
+        # Art. 6.g: en un conjunto articulado, tractora Y remolque. Un camión
+        # rígido lo dice expresamente en vez de dejar la casilla vacía.
+        _fila('Matrícula remolque', 'Sin remolque (camión rígido o furgoneta)' if expedicion.sin_remolque else expedicion.matricula_remolque),
         _fila('Origen', expedicion.origen),
         _fila('Destino', expedicion.destino),
         _fila('Fecha y hora del transporte', fecha_texto),
@@ -227,6 +243,16 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
         filas_transporte.append(_fila('Volumen', f'{expedicion.volumen_m3} m³'))
     if expedicion.codigo_mercancia:
         filas_transporte.append(_fila('Código de la mercancía', expedicion.codigo_mercancia))
+    # Art. 6.e: solo cuando se circula con autorización especial.
+    if expedicion.autorizacion_especial:
+        filas_transporte.append(_fila('Autorización especial de circulación', expedicion.autorizacion_especial))
+    # Hecho sin cobertura: el documento que viajó en el camión fue el impreso
+    # en el móvil; este PDF lo registra y lo dice.
+    if expedicion.emitido_sin_conexion_en:
+        filas_transporte.append(_fila(
+            'Emitido sin conexión',
+            f'{expedicion.emitido_sin_conexion_en.strftime("%d/%m/%Y %H:%M")} · ref. {expedicion.referencia_offline}',
+        ))
     tabla_transporte = Table(filas_transporte, colWidths=[ANCHO_UTIL_MM * 0.35 * mm, ANCHO_UTIL_MM * 0.65 * mm])
     tabla_transporte.setStyle(_tabla_transporte_style())
     # `KeepTogether` -- sin esto, un salto de página puede caer justo entre
@@ -290,6 +316,39 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
         elementos.append(KeepTogether([Paragraph('Transportistas sucesivos', estilo_seccion), tabla_sucesivos]))
         elementos.append(Spacer(1, 6 * mm))
 
+    # Correcciones hechas tras generar (Resolución de 5-jun-2026, apartado
+    # quinto): en el MISMO PDF (misma URL y QR) van los datos nuevos, el
+    # motivo y los antiguos "indicando claramente que ya no son válidos".
+    modificaciones = [] if borrador else list(expedicion.modificaciones.select_related('usuario').all())
+    if modificaciones:
+        estilo_celda = ParagraphStyle('CeldaMod', parent=estilos['Normal'], fontSize=8.5, leading=10.5)
+        bloque = [Paragraph('Modificaciones durante el servicio', estilo_seccion)]
+        for n, mod in enumerate(modificaciones, start=1):
+            quien = (mod.usuario.get_full_name() or mod.usuario.username) if mod.usuario_id else ''
+            cabecera = (
+                f'<b>Modificación {n}</b> · {_fecha_empresa(mod.fecha_alta, None)}'
+                f'{f" · {escape(quien)}" if quien else ""}<br/><b>Motivo:</b> {escape(mod.motivo)}'
+            )
+            filas = [['Dato', 'Dato anterior (YA NO VÁLIDO)', 'Dato nuevo']]
+            for c in mod.cambios:
+                filas.append([
+                    Paragraph(escape(ETIQUETAS_CAMPO.get(c.get('campo'), c.get('campo', ''))), estilo_celda),
+                    Paragraph(f'<strike>{escape(c.get("antes") or "—")}</strike>', estilo_celda),
+                    Paragraph(escape(c.get('despues') or '—'), estilo_celda),
+                ])
+            tabla_mod = Table(filas, colWidths=[ANCHO_UTIL_MM * f * mm for f in (0.28, 0.36, 0.36)])
+            tabla_mod.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F3F4F6')),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 8.5),
+                ('TEXTCOLOR', (1, 1), (1, -1), colors.HexColor('#991B1B')),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#D1D5DB')),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            bloque.append(KeepTogether([Paragraph(cabecera, estilo_celda), Spacer(1, 1.5 * mm), tabla_mod, Spacer(1, 3 * mm)]))
+        elementos.extend(bloque)
+        elementos.append(Spacer(1, 4 * mm))
+
     # Recuadro para uso de la inspección -- espacio en blanco real (no
     # relleno), práctica habitual en este tipo de documento de control.
     caja_observaciones = Table([['']], colWidths=[ANCHO_UTIL_MM * mm], rowHeights=[22 * mm])
@@ -313,8 +372,10 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
             f'bloqueada: si detectas un error después, tendrás que anularla y crear una nueva.'
         )
     else:
+        creado = expedicion.emitido_sin_conexion_en or expedicion.fecha_generacion or ahora
+        modificado = f' · modificado el {ahora.strftime("%d/%m/%Y %H:%M")} UTC' if modificaciones else ''
         pie = (
-            f'Documento generado electrónicamente el {ahora.strftime("%d/%m/%Y %H:%M")} UTC · '
+            f'Documento generado electrónicamente el {creado.strftime("%d/%m/%Y %H:%M")} UTC{modificado} · '
             f'{empresa_nombre} · Documento de control conforme a la Orden FOM/2861/2012 '
             f'y a la Resolución de 5 de junio de 2026. La descarga pública de este documento sin '
             f'autenticación está disponible durante la ventana legal configurada; pasada esta, se '
@@ -324,4 +385,49 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
 
     callback_qr = _dibujar_qr_esquina(qr_png, marca_agua=borrador)
     doc.build(elementos, onFirstPage=callback_qr, onLaterPages=callback_qr)
-    return buffer.getvalue()
+    if borrador:
+        return buffer.getvalue()
+    # Apartado segundo: la fecha y hora de CREACIÓN y de MODIFICACIÓN son
+    # metadatos del PDF. reportlab pone la misma a las dos; la creación es la
+    # de la primera generación (o la del móvil, si se emitió sin cobertura).
+    creado = expedicion.emitido_sin_conexion_en or expedicion.fecha_generacion or ahora
+    return _fijar_fechas_pdf(buffer.getvalue(), creado, ahora)
+
+
+ETIQUETAS_CAMPO = {
+    'numero_albaran': 'Nº de albarán', 'numero_cmr': 'Nº de CMR',
+    'nif_cargador': 'NIF del cargador', 'nombre_cargador': 'Cargador', 'domicilio_cargador': 'Domicilio del cargador',
+    'nif_transportista': 'NIF del transportista', 'nombre_transportista': 'Transportista',
+    'nif_destinatario': 'NIF del destinatario', 'nombre_destinatario': 'Destinatario',
+    'matricula_tractor': 'Matrícula vehículo / tractora', 'matricula_remolque': 'Matrícula remolque',
+    'sin_remolque': 'Sin remolque', 'autorizacion_especial': 'Autorización especial',
+    'origen': 'Origen', 'destino': 'Destino', 'fecha_hora_transporte': 'Fecha y hora del transporte',
+    'naturaleza_mercancia': 'Naturaleza de la mercancía', 'peso_kg': 'Peso (kg)', 'peso_estimado': 'Peso estimado',
+    'bultos': 'Bultos', 'volumen_m3': 'Volumen (m³)', 'codigo_mercancia': 'Código de la mercancía',
+    'numero_pedido': 'Nº de pedido', 'comentarios': 'Observaciones',
+    'nombre_conductor': 'Conductor', 'nif_conductor': 'NIF del conductor',
+    'telefono_conductor': 'Teléfono del conductor', 'email_conductor': 'Email del conductor',
+}
+
+
+def _fecha_empresa(fecha, empresa) -> str:
+    from zoneinfo import ZoneInfo
+
+    # Standalone: zona horaria de la instalación (settings.TIME_ZONE).
+    zona = ZoneInfo(settings.TIME_ZONE or 'Europe/Madrid')
+    return timezone.localtime(fecha, zona).strftime('%d/%m/%Y %H:%M')
+
+
+def _fecha_pdf(fecha) -> str:
+    utc = fecha.astimezone(dt_timezone.utc)
+    return utc.strftime("D:%Y%m%d%H%M%S+00'00'")
+
+
+def _fijar_fechas_pdf(contenido: bytes, creado, modificado) -> bytes:
+    from pypdf import PdfReader, PdfWriter
+
+    escritor = PdfWriter(clone_from=PdfReader(io.BytesIO(contenido)))
+    escritor.add_metadata({'/CreationDate': _fecha_pdf(creado), '/ModDate': _fecha_pdf(modificado)})
+    salida = io.BytesIO()
+    escritor.write(salida)
+    return salida.getvalue()

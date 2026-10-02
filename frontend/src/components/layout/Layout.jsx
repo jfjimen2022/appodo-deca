@@ -1,14 +1,49 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Truck, Users2, Settings, Users, LogOut, Package } from 'lucide-react'
+import { useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
+import { decaService } from '../../services/decaService'
+import {
+  sincronizarCola, prepararDecaSinConexion, guardarSesionDeca, pedirComprobacionPeriodica,
+} from '../../lib/decaOffline'
+// Se importa por su efecto: captura el aviso de "instalar app" del navegador
+// en cuanto arranca la app, para poder ofrecerlo después (lib/instalarApp.js).
+import '../../lib/instalarApp'
 import { APP_VERSION, APPODO_SYNC_VERSION, APPODO_SYNC_FECHA } from '../../version'
 
 // Shell mínimo del standalone: cabecera con el nombre de la app + nav con
 // 3-4 enlaces (Expediciones, Agenda, Configuración/Usuarios si es admin) +
 // logout. Nada del Sidebar/Header/BottomNav multi-módulo del ERP origen.
 export default function Layout() {
-  const { user, isAdmin, logout } = useAuth()
+  const { user, empresa, isAdmin, logout } = useAuth()
   const navigate = useNavigate()
+
+  // DeCA hechos sin cobertura: se registran solos en cuanto hay red, esté
+  // donde esté el usuario (no solo en la lista de Expediciones). Además, al
+  // iniciar sesión se deja preparado el móvil para trabajar sin red (agenda
+  // + configuración), sin que nadie tenga que acordarse de abrir el
+  // formulario antes de salir al campo; y se guarda quién es la sesión para
+  // que el service worker registre la cola con la app cerrada
+  // (lib/decaOffline.js y src/sw.js).
+  useEffect(() => {
+    if (!user?.id || !empresa?.id) return undefined
+    const ids = { empresaId: empresa.id, usuarioId: user.id }
+    guardarSesionDeca(ids.empresaId, ids.usuarioId)
+    pedirComprobacionPeriodica()
+    const alHaberRed = () => {
+      if (navigator.onLine === false) return
+      sincronizarCola({ ...ids, servicio: decaService }).catch(() => {})
+      prepararDecaSinConexion({ ...ids, servicio: decaService }).catch(() => {})
+    }
+    alHaberRed()
+    const alMensajeSW = (e) => { if (e.data?.type === 'SW_SYNC_DECA') alHaberRed() }
+    window.addEventListener('online', alHaberRed)
+    navigator.serviceWorker?.addEventListener('message', alMensajeSW)
+    return () => {
+      window.removeEventListener('online', alHaberRed)
+      navigator.serviceWorker?.removeEventListener('message', alMensajeSW)
+    }
+  }, [user?.id, empresa?.id])
 
   const handleLogout = async () => {
     await logout()

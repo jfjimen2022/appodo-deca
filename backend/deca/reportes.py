@@ -138,6 +138,7 @@ def generar_excel_expediciones(expediciones, empresa_nombre='', config=None, gen
 TITULOS_AGENDA = {
     'transportistas': 'Transportistas',
     'destinatarios': 'Destinatarios',
+    'cargadores': 'Cargadores',
     'conductores': 'Conductores',
     'tractoras': 'Tractoras',
     'remolques': 'Remolques',
@@ -157,6 +158,14 @@ COLUMNAS_AGENDA = {
         'telefono': {'label': 'Teléfono', 'peso': 15, 'ancho_excel': 16},
         'email': {'label': 'Email', 'peso': 25, 'ancho_excel': 28},
         'activo': {'label': 'Estado', 'peso': 10, 'ancho_excel': 14},
+    },
+    'cargadores': {
+        'nombre': {'label': 'Nombre', 'peso': 28, 'ancho_excel': 34, 'truncar': 50},
+        'nif': {'label': 'NIF/CIF', 'peso': 12, 'ancho_excel': 16},
+        'domicilio': {'label': 'Domicilio', 'peso': 25, 'ancho_excel': 40, 'truncar': 50},
+        'telefono': {'label': 'Teléfono', 'peso': 12, 'ancho_excel': 16},
+        'email': {'label': 'Email', 'peso': 15, 'ancho_excel': 28},
+        'activo': {'label': 'Estado', 'peso': 8, 'ancho_excel': 14},
     },
     'conductores': {
         'nombre': {'label': 'Nombre', 'peso': 35, 'ancho_excel': 34, 'truncar': 60},
@@ -262,6 +271,112 @@ def generar_excel_agenda(tipo, fichas, empresa_nombre='', config=None, generado_
         fichas, TITULOS_AGENDA[tipo], columnas_def, list(columnas_def.keys()),
         _valor_columna_agenda, empresa_nombre, config, generado_por,
         resumen_filtros_legible_agenda(filtros),
+    )
+
+
+# ─── Auditoría de una expedición ────────────────────────────────────────
+#
+# A diferencia de Expediciones/Agenda, este informe es de UN registro
+# concreto (el historial append-only de una expedición), no un listado
+# filtrable -- por eso no hay `resumen_filtros_legible_*` ni parámetro
+# `filtros` real, solo se documenta el número de expedición en el título.
+
+COLUMNAS_AUDITORIA = {
+    'fecha':   {'label': 'Fecha', 'peso': 14, 'ancho_excel': 18},
+    'evento':  {'label': 'Evento', 'peso': 18, 'ancho_excel': 22},
+    'usuario': {'label': 'Usuario', 'peso': 20, 'ancho_excel': 26, 'truncar': 40},
+    'detalle': {'label': 'Detalle', 'peso': 38, 'ancho_excel': 50, 'truncar': 200},
+    'hash':    {'label': 'Hash del documento', 'peso': 10, 'ancho_excel': 18, 'truncar': 12},
+}
+ORDEN_COLUMNAS_AUDITORIA = list(COLUMNAS_AUDITORIA.keys())
+
+
+def _nombre_usuario_evento(usuario):
+    if not usuario:
+        return 'Sistema'
+    return usuario.get_full_name() or usuario.username
+
+
+def _valor_columna_auditoria(col_id, evento):
+    if col_id == 'fecha':
+        return _fecha_legible(evento.fecha_alta)
+    if col_id == 'evento':
+        return evento.get_tipo_evento_display()
+    if col_id == 'usuario':
+        return _nombre_usuario_evento(evento.usuario)
+    if col_id == 'detalle':
+        return evento.detalle or '—'
+    if col_id == 'hash':
+        return evento.hash_documento[:12] if evento.hash_documento else '—'
+    return '—'
+
+
+def _titulo_auditoria(expedicion, config=None) -> str:
+    from .services import identificador_service
+    identificador = identificador_service.identificador_expedicion(expedicion, config)
+    return f'Historial de auditoría — DeCA {identificador}'
+
+
+def generar_pdf_auditoria_expedicion(expedicion, eventos, empresa_nombre, config=None, generado_por=None) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import SimpleDocTemplate, Table, Paragraph, Spacer
+    from reportlab.lib.units import inch
+    from .pdf_utils import NumberedCanvas, construir_cabecera_documento_controlado
+
+    titulo = _titulo_auditoria(expedicion, config)
+
+    buffer = io.BytesIO()
+    LEFT = 0.6 * inch
+    RIGHT = 0.6 * inch
+    available_width = A4[0] - LEFT - RIGHT
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        topMargin=0.5 * inch, bottomMargin=0.5 * inch, leftMargin=LEFT, rightMargin=RIGHT,
+    )
+    styles = getSampleStyleSheet()
+    elements = []
+
+    if config and config.informe_mostrar_cabecera:
+        elements.append(construir_cabecera_documento_controlado(
+            config, empresa_nombre, generado_por, available_width,
+            titulo_informe=titulo, total_registros=len(eventos),
+            resumen_filtro='Historial completo de la expedición',
+        ))
+        elements.append(Spacer(1, 0.2 * inch))
+    else:
+        elements.append(Paragraph(f'<b>{titulo} — {empresa_nombre}</b>', styles['Title']))
+        elements.append(Spacer(1, 0.1 * inch))
+        elements.append(Paragraph(
+            f'Generado: {date.today().strftime("%d/%m/%Y")} · Total de eventos: {len(eventos)}', styles['Normal']))
+        elements.append(Spacer(1, 0.2 * inch))
+
+    columnas = ORDEN_COLUMNAS_AUDITORIA
+    peso_total = sum(COLUMNAS_AUDITORIA[c]['peso'] for c in columnas)
+    col_widths = [available_width * (COLUMNAS_AUDITORIA[c]['peso'] / peso_total) for c in columnas]
+
+    data = [[COLUMNAS_AUDITORIA[c]['label'] for c in columnas]]
+    for evento in eventos:
+        fila = []
+        for c in columnas:
+            valor = _valor_columna_auditoria(c, evento)
+            truncar = COLUMNAS_AUDITORIA[c].get('truncar')
+            fila.append(Paragraph(valor[:truncar], styles['Normal']) if truncar else valor)
+        data.append(fila)
+
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(_estilo_tabla_informe())
+    elements.append(table)
+
+    doc.build(elements, canvasmaker=NumberedCanvas)
+    return buffer.getvalue()
+
+
+def generar_excel_auditoria_expedicion(expedicion, eventos, empresa_nombre='', config=None, generado_por=None) -> bytes:
+    return _generar_excel_generico(
+        eventos, _titulo_auditoria(expedicion, config), COLUMNAS_AUDITORIA, ORDEN_COLUMNAS_AUDITORIA,
+        _valor_columna_auditoria, empresa_nombre, config, generado_por,
+        'Historial completo de la expedición',
     )
 
 

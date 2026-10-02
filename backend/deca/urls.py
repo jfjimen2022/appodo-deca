@@ -19,6 +19,28 @@ urlpatterns = [
         views.DestinatarioDecaDetailView.as_view(),
         name='deca-destinatario-detalle',
     ),
+    path('deca/cargadores/', views.CargadorDecaListView.as_view(), name='deca-cargadores'),
+    path(
+        'deca/cargadores/<uuid:pk>/',
+        views.CargadorDecaDetailView.as_view(),
+        name='deca-cargador-detalle',
+    ),
+    # Sinónimos aprendidos al corregir lecturas (services/aprendizaje_service.py).
+    path('deca/sinonimos/', views.AliasAgendaDecaListView.as_view(), name='deca-sinonimos'),
+    path('deca/precision-lectura/', views.PrecisionLecturaDecaView.as_view(), name='deca-precision-lectura'),
+    path('deca/sinonimos/<uuid:pk>/', views.AliasAgendaDecaDetailView.as_view(), name='deca-sinonimo-detalle'),
+    # Modelos de documento (plantillas por emisor) para leer mejor los documentos.
+    path('deca/plantillas/', views.PlantillaDocumentoDecaListView.as_view(), name='deca-plantillas'),
+    path(
+        'deca/plantillas/analizar/',
+        views.AnalizarEjemploPlantillaDecaView.as_view(),
+        name='deca-plantillas-analizar',
+    ),
+    path(
+        'deca/plantillas/<uuid:pk>/',
+        views.PlantillaDocumentoDecaDetailView.as_view(),
+        name='deca-plantilla-detalle',
+    ),
     path('deca/tractoras/', views.TractoraDecaListView.as_view(), name='deca-tractoras'),
     path('deca/tractoras/<uuid:pk>/', views.TractoraDecaDetailView.as_view(), name='deca-tractora-detalle'),
     path('deca/remolques/', views.RemolqueDecaListView.as_view(), name='deca-remolques'),
@@ -86,6 +108,11 @@ urlpatterns = [
         name='deca-expedicion-anular',
     ),
     path(
+        'deca/expediciones/<uuid:expedicion_id>/registrar-papel/',
+        views.RegistrarPapelExpedicionDecaView.as_view(),
+        name='deca-expedicion-registrar-papel',
+    ),
+    path(
         'deca/expediciones/<uuid:expedicion_id>/enviar-email/',
         views.EnviarEmailExpedicionDecaView.as_view(),
         name='deca-expedicion-enviar-email',
@@ -104,6 +131,16 @@ urlpatterns = [
         'deca/expediciones/<uuid:expedicion_id>/eventos/',
         views.EventoExpedicionDecaListView.as_view(),
         name='deca-eventos',
+    ),
+    path(
+        'deca/expediciones/<uuid:expedicion_id>/auditoria/exportar-pdf/',
+        views.ExportarPDFAuditoriaExpedicionDecaView.as_view(),
+        name='deca-auditoria-exportar-pdf',
+    ),
+    path(
+        'deca/expediciones/<uuid:expedicion_id>/auditoria/exportar-excel/',
+        views.ExportarExcelAuditoriaExpedicionDecaView.as_view(),
+        name='deca-auditoria-exportar-excel',
     ),
     path('deca/publico/<uuid:token>/', views.DecaDescargaPublicaView.as_view(), name='deca-descarga-publica'),
 

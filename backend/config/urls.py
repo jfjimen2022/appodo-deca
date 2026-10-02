@@ -24,6 +24,20 @@ class MeView(APIView):
             'username': u.username,
             'email': u.email,
             'is_staff': u.is_staff,
+            # La empresa de la instalación (una sola, ver EMPRESA_NOMBRE /
+            # EMPRESA_NIF en .env). El frontend la usa como en el ERP origen:
+            # `id` fija el ámbito de la caché y la cola offline del móvil, y
+            # el NIF se precarga como transportista (si ese es el papel
+            # habitual) y se excluye al repartir los NIF leídos de un papel.
+            'empresa': {
+                'id': 'instalacion',
+                'nombre': settings.EMPRESA_NOMBRE,
+                'cif': settings.EMPRESA_NIF,
+                # Domicilio completo en una línea: el formulario lo usa como
+                # domicilio del cargador al pulsar "Lo contratamos nosotros"
+                # (art. 6.a de la Orden FOM/2861/2012 lo exige).
+                'direccion': settings.EMPRESA_DOMICILIO,
+            },
         })
 
 

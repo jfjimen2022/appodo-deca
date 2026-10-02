@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import time
 
 import requests
 from django.conf import settings
@@ -50,11 +51,26 @@ def _timeout() -> float:
         return 30.0
 
 
+_ESTADOS_REINTENTABLES = {429, 500, 502, 503, 504}
+_REINTENTOS = 2
+
+
 def _post(payload: dict) -> str:
     url = _GEMINI_API_URL.format(model=_modelo())
-    respuesta = requests.post(
-        url, params={'key': _api_key()}, json=payload, timeout=_timeout(),
-    )
+    # Gemini saturado (503) o con límite de ritmo (429) responde bien al poco
+    # rato: dos reintentos cortos antes de rendirse, igual que en el ERP.
+    for intento in range(_REINTENTOS + 1):
+        respuesta = requests.post(
+            url, params={'key': _api_key()}, json=payload, timeout=_timeout(),
+        )
+        if respuesta.status_code not in _ESTADOS_REINTENTABLES or intento == _REINTENTOS:
+            break
+        time.sleep(2 * (intento + 1))
+    if respuesta.status_code in _ESTADOS_REINTENTABLES:
+        raise Exception(
+            'El servicio de IA está saturado ahora mismo. Vuelve a intentarlo en unos minutos '
+            'con el botón "Extraer datos".'
+        )
     respuesta.raise_for_status()
     datos = respuesta.json()
     try:

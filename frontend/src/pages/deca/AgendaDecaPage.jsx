@@ -15,9 +15,10 @@ import {
 import {
   Users2, Plus, Pencil, Trash2, Loader2, Search, Archive, ArchiveRestore,
   MoreHorizontal, FileText, FileSpreadsheet, ChevronLeft, ChevronRight,
-  Upload, Download, CheckCircle2, AlertCircle,
+  Upload, Download, CheckCircle2, AlertCircle, Sparkles,
 } from 'lucide-react'
 import SortableHeader from '../../components/ui/SortableHeader'
+import SinonimosAprendidosDeca from '../../components/deca/SinonimosAprendidosDeca'
 import { useToast } from '../../context/ToastContext'
 
 // Los cuatro catálogos de DeCA en una sola pantalla. Se auto-alimentan al
@@ -47,6 +48,22 @@ const CATALOGOS = [
       { name: 'email', label: 'Email', type: 'email', placeholder: 'contacto@ejemplo.com' },
     ],
     columnas: ['nombre', 'nif', 'telefono', 'email'],
+    principal: 'nombre',
+    ordenDefecto: 'nombre',
+  },
+  {
+    tipo: 'cargadores',
+    etiqueta: 'Cargadores',
+    campos: [
+      { name: 'nombre', label: 'Nombre o razón social', required: true, placeholder: 'Fábrica Ejemplo SL' },
+      { name: 'nif', label: 'NIF/CIF', required: true, placeholder: 'B12345674' },
+      // Obligatorio en el DeCA (Orden FOM/2861/2012 art. 6.a): al elegir el
+      // cargador en una expedición, el domicilio se rellena solo desde aquí.
+      { name: 'domicilio', label: 'Domicilio', placeholder: 'Calle Mayor 1, 04001 Almería' },
+      { name: 'telefono', label: 'Teléfono', placeholder: '600111222' },
+      { name: 'email', label: 'Email', type: 'email', placeholder: 'contacto@ejemplo.com' },
+    ],
+    columnas: ['nombre', 'nif', 'domicilio', 'telefono'],
     principal: 'nombre',
     ordenDefecto: 'nombre',
   },
@@ -87,10 +104,14 @@ const CATALOGOS = [
   },
 ]
 
+// Pestaña extra, no es un catálogo con altas: se aprende sola (ver
+// components/deca/SinonimosAprendidosDeca.jsx).
+const TIPO_SINONIMOS = 'sinonimos'
+
 const CAMPO_ORDENABLE = new Set(['nombre', 'nif', 'matricula', 'alias'])
 
 const ETIQUETA_COLUMNA = {
-  nombre: 'Nombre', nif: 'NIF/CIF', telefono: 'Teléfono', email: 'Email',
+  nombre: 'Nombre', nif: 'NIF/CIF', domicilio: 'Domicilio', telefono: 'Teléfono', email: 'Email',
   matricula: 'Matrícula', alias: 'Alias',
 }
 
@@ -120,7 +141,9 @@ export default function AgendaDecaPage() {
   const [resultadoImportar, setResultadoImportar] = useState(null)
   const [errorImportar, setErrorImportar] = useState('')
 
-  const catalogo = CATALOGOS.find((c) => c.tipo === tipoActivo)
+  // En la pestaña de sinónimos no hay catálogo: se usa el primero como
+  // reserva para que los diálogos (que no se abren ahí) no fallen al montar.
+  const catalogo = CATALOGOS.find((c) => c.tipo === tipoActivo) ?? CATALOGOS[0]
 
   const buildParams = useCallback((incluirPaginacion) => {
     const params = {}
@@ -136,6 +159,7 @@ export default function AgendaDecaPage() {
   }, [busqueda, ordering, page, pageSize])
 
   const cargar = useCallback(() => {
+    if (tipoActivo === TIPO_SINONIMOS) return // la pestaña carga lo suyo
     setCargando(true)
     decaService.listarCatalogo(tipoActivo, buildParams(true))
       .then(({ data }) => {
@@ -153,7 +177,8 @@ export default function AgendaDecaPage() {
   const handleCambiarTipo = (tipo) => {
     setTipoActivo(tipo)
     setBusqueda('')
-    setOrdering({ field: CATALOGOS.find((c) => c.tipo === tipo).ordenDefecto, dir: 'asc' })
+    const destino = CATALOGOS.find((c) => c.tipo === tipo)
+    if (destino) setOrdering({ field: destino.ordenDefecto, dir: 'asc' })
   }
 
   const handleSort = (field) => {
@@ -294,9 +319,11 @@ export default function AgendaDecaPage() {
             </p>
           </div>
         </div>
-        <Button onClick={abrirAlta} className="gap-1.5 shrink-0">
-          <Plus className="h-4 w-4" /> {t('agenda.btn_nuevo', 'Añadir ficha')}
-        </Button>
+        {tipoActivo !== TIPO_SINONIMOS && (
+          <Button onClick={abrirAlta} className="gap-1.5 shrink-0">
+            <Plus className="h-4 w-4" /> {t('agenda.btn_nuevo', 'Añadir ficha')}
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2 shrink-0">
@@ -315,8 +342,21 @@ export default function AgendaDecaPage() {
             {t(`agenda.tab_${c.tipo}`, c.etiqueta)}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => handleCambiarTipo(TIPO_SINONIMOS)}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors inline-flex items-center gap-1.5 ${
+            tipoActivo === TIPO_SINONIMOS
+              ? 'bg-[var(--color-marca)] text-white border-[var(--color-marca)]'
+              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+          }`}
+          aria-pressed={tipoActivo === TIPO_SINONIMOS}
+        >
+          <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />{t('sinonimos.tab')}
+        </button>
       </div>
 
+      {tipoActivo === TIPO_SINONIMOS ? <SinonimosAprendidosDeca /> : (<>
       <div className="flex items-center gap-2 flex-wrap shrink-0">
         <div className="relative max-w-sm flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -479,6 +519,7 @@ export default function AgendaDecaPage() {
           )}
         </div>
       )}
+      </>)}
 
       {/* Alta / edición */}
       <Dialog open={dialogAbierto} onOpenChange={setDialogAbierto}>

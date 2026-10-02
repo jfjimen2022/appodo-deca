@@ -41,15 +41,34 @@ export const decaService = {
   buscarConductores: (q = '') => api.get('/api/v1/deca/conductores/', { params: { solo_activos: 'true', page_size: 500, ...(q ? { q } : {}) } }),
   buscarTransportistas: (q = '') => api.get('/api/v1/deca/transportistas/', { params: { solo_activos: 'true', page_size: 500, ...(q ? { q } : {}) } }),
   buscarDestinatarios: (q = '') => api.get('/api/v1/deca/destinatarios/', { params: { solo_activos: 'true', page_size: 500, ...(q ? { q } : {}) } }),
+  buscarCargadores: (q = '') => api.get('/api/v1/deca/cargadores/', { params: { solo_activos: 'true', page_size: 500, ...(q ? { q } : {}) } }),
   buscarTractoras: (q = '') => api.get('/api/v1/deca/tractoras/', { params: { solo_activos: 'true', page_size: 500, ...(q ? { q } : {}) } }),
   buscarRemolques: (q = '') => api.get('/api/v1/deca/remolques/', { params: { solo_activos: 'true', page_size: 500, ...(q ? { q } : {}) } }),
 
   // CRUD de la Agenda (pantalla de gestión de los catálogos). `tipo` es uno
-  // de: conductores | transportistas | destinatarios | tractoras | remolques.
+  // de: conductores | transportistas | destinatarios | cargadores | tractoras | remolques.
   listarCatalogo: (tipo, params = {}) => api.get(`/api/v1/deca/${tipo}/`, { params }),
   crearEnCatalogo: (tipo, data) => api.post(`/api/v1/deca/${tipo}/`, data),
   actualizarEnCatalogo: (tipo, id, data) => api.patch(`/api/v1/deca/${tipo}/${id}/`, data),
   borrarDeCatalogo: (tipo, id) => api.delete(`/api/v1/deca/${tipo}/${id}/`),
+
+  // Modelos de documento (plantillas por emisor): se reconocen solos al
+  // subir un documento y mejoran lo que se lee. `analizarEjemploPlantilla`
+  // lee un ejemplo sin guardarlo, para dar de alta el modelo a partir de él.
+  // Sinónimos aprendidos al corregir lecturas ("TTES ROMERO" = Transportes
+  // Romero Ruiz S.L.) -- solo se listan y se olvidan; se crean solos.
+  listarSinonimos: (params = {}) => api.get('/api/v1/deca/sinonimos/', { params }),
+  borrarSinonimo: (id) => api.delete(`/api/v1/deca/sinonimos/${id}/`),
+  precisionLectura: (params = {}) => api.get('/api/v1/deca/precision-lectura/', { params }),
+  listarPlantillas: () => api.get('/api/v1/deca/plantillas/', { params: { page_size: 500 } }),
+  crearPlantilla: (data) => api.post('/api/v1/deca/plantillas/', data),
+  actualizarPlantilla: (id, data) => api.patch(`/api/v1/deca/plantillas/${id}/`, data),
+  borrarPlantilla: (id) => api.delete(`/api/v1/deca/plantillas/${id}/`),
+  analizarEjemploPlantilla: (archivo) => {
+    const form = new FormData()
+    form.append('archivo', archivo, archivo.name || 'ejemplo.jpg')
+    return api.post('/api/v1/deca/plantillas/analizar/', form)
+  },
 
   // Expediciones (CRUD)
   listarExpediciones: (params = {}) => api.get('/api/v1/deca/expediciones/', { params }),
@@ -66,7 +85,7 @@ export const decaService = {
     _descargarExportacion('/api/v1/deca/expediciones/exportar-excel/', params, 'expediciones_deca', 'xlsx'),
 
   // Exportación de la Agenda -- `tipo` es uno de: conductores |
-  // transportistas | destinatarios | tractoras | remolques.
+  // transportistas | destinatarios | cargadores | tractoras | remolques.
   exportarAgendaPDF: (tipo, params = {}) =>
     _descargarExportacion(`/api/v1/deca/agenda/${tipo}/exportar-pdf/`, params, `agenda_deca_${tipo}`, 'pdf'),
   exportarAgendaExcel: (tipo, params = {}) =>
@@ -88,7 +107,13 @@ export const decaService = {
   // nunca se guarda sin que el usuario confirme).
   subirDocumento: (expedicionId, archivo, tipoDocumento, { extraer = false } = {}) => {
     const form = new FormData()
-    form.append('archivo', archivo)
+    // El tercer argumento (nombre de archivo) es obligatorio aquí -- una foto
+    // tomada con la cámara en iOS Safari (input capture="environment") puede
+    // no llevar el nombre embebido de forma fiable al serializar el FormData,
+    // y sin él el backend recibe la parte multipart SIN filename: Django la
+    // trata como campo de texto normal en vez de fichero y `request.FILES`
+    // llega vacío -- error real reproducido en producción, iPhone, 2026-09-25.
+    form.append('archivo', archivo, archivo.name || 'documento.jpg')
     form.append('tipo_documento', tipoDocumento)
     return api.post(`/api/v1/deca/expediciones/${expedicionId}/documentos/`, form, {
       params: extraer ? { extraer: 'true' } : {},
@@ -107,11 +132,17 @@ export const decaService = {
   // haga falta mientras se corrige. Blob para abrir/descargar en el navegador.
   vistaPreviaExpedicion: (id) =>
     api.get(`/api/v1/deca/expediciones/${id}/vista-previa/`, { responseType: 'blob' }),
+  // Con lo que hay en pantalla, sin guardar nada (el servidor lo aplica solo
+  // en memoria para pintar el PDF de vista previa).
+  vistaPreviaConDatos: (id, datos) =>
+    api.post(`/api/v1/deca/expediciones/${id}/vista-previa/`, datos, { responseType: 'blob' }),
 
   // Transiciones de estado
   confirmarExpedicion: (id) => api.post(`/api/v1/deca/expediciones/${id}/confirmar/`),
   generarDeca: (id) => api.post(`/api/v1/deca/expediciones/${id}/generar/`),
   anularExpedicion: (id, motivo = '') => api.post(`/api/v1/deca/expediciones/${id}/anular/`, { motivo }),
+  // DeCA del talonario de papel, registrado con su foto (sin PDF ni QR).
+  registrarPapel: (id) => api.post(`/api/v1/deca/expediciones/${id}/registrar-papel/`),
   enviarEmailExpedicion: (id, { destinatario, asunto = '', cuerpo = '' }) =>
     api.post(`/api/v1/deca/expediciones/${id}/enviar-email/`, { destinatario, asunto, cuerpo }),
 
@@ -128,10 +159,21 @@ export const decaService = {
   // Auditoría (histórico append-only de una expedición)
   listarEventos: (expedicionId) => api.get(`/api/v1/deca/expediciones/${expedicionId}/eventos/`),
 
+  // Informe de auditoría de UNA expedición (historial completo) -- distinto
+  // de exportarExpedicionesPDF/Excel, que exportan el LISTADO de varias.
+  exportarAuditoriaExpedicionPDF: (expedicionId) =>
+    _descargarExportacion(`/api/v1/deca/expediciones/${expedicionId}/auditoria/exportar-pdf/`, {}, 'auditoria_deca', 'pdf'),
+  exportarAuditoriaExpedicionExcel: (expedicionId) =>
+    _descargarExportacion(`/api/v1/deca/expediciones/${expedicionId}/auditoria/exportar-excel/`, {}, 'auditoria_deca', 'xlsx'),
+
   // Descarga pública por QR -- endpoint sin login, aquí solo se construye la
   // URL (para el botón "copiar enlace"/mostrar QR), nunca se llama por axios.
+  // SIEMPRE absoluta: va dentro de un QR que se escanea con otro móvil. En
+  // producción VITE_API_URL está vacío (mismo dominio) y la URL salía como
+  // "/api/v1/..." sin dominio -- el QR de pantalla no llevaba a ninguna parte
+  // (detectado 2026-09-30; el QR del PDF lo pinta el servidor y sí iba bien).
   urlDescargaPublica: (tokenPublico) => {
-    const base = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+    const base = (import.meta.env.VITE_API_URL || window.location.origin).replace(/\/$/, '')
     return `${base}/api/v1/deca/publico/${tokenPublico}/`
   },
 }

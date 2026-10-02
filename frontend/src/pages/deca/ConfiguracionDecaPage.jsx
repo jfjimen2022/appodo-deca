@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  ShieldCheck, Bell, Save, Loader2, Building2, FileSignature,
+  ShieldCheck, Bell, Save, Loader2, Building2, FileSignature, Mail, Hash,
 } from 'lucide-react'
 import { decaService } from '../../services/decaService'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
@@ -10,10 +10,15 @@ import { Input } from '../../components/ui/input'
 import { Label } from '../../components/ui/label'
 import { Switch } from '../../components/ui/switch'
 import { Checkbox } from '../../components/ui/checkbox'
+import { Textarea } from '../../components/ui/textarea'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select'
 import { useToast } from '../../context/ToastContext'
+import PlantillasDocumentoDeca from '../../components/deca/PlantillasDocumentoDeca'
+import PrecisionLecturaDeca from '../../components/deca/PrecisionLecturaDeca'
+import TrabajoCampoDeca from '../../components/deca/TrabajoCampoDeca'
+import PrioridadAgendaDeca from '../../components/deca/PrioridadAgendaDeca'
 
 // TODO(standalone): en el ERP origen esta pantalla incluía una tarjeta de
 // "Repositorio y custodia legal" que conectaba con Google Drive de la
@@ -29,6 +34,7 @@ const CONFIG_VACIA = {
   rol_habitual: 'cargador',
   dias_visibilidad_publica: 10,
   dias_retencion_ip_eventos: 365,
+  horas_max_edicion_generado: 24,
   canal_notificacion_conductor: 'email',
   notificar_cliente_activo: false,
   canal_notificacion_cliente: 'email',
@@ -40,6 +46,18 @@ const CONFIG_VACIA = {
   informe_edicion: '',
   informe_preparado_por: '',
   informe_autorizado_por: '',
+  plantilla_asunto_email: '',
+  plantilla_cuerpo_email: '',
+  identificador_preferido: 'numero_albaran',
+  prefijo_numero_automatico: 'DECA-',
+  ultimo_numero_automatico: 0,
+  modo_sin_cobertura: 'imprimir',
+  ejemplares_sin_cobertura: 2,
+  registrar_papel_por_foto: false,
+  deca_anticipado: false,
+  aviso_sin_completar: true,
+  aviso_sin_completar_dias: 2,
+  agenda_prioritaria: true,
 }
 
 const DIAS_VISIBILIDAD_MINIMO = 7
@@ -85,13 +103,19 @@ export default function ConfiguracionDecaPage() {
         ...config,
         dias_visibilidad_publica: Math.max(DIAS_VISIBILIDAD_MINIMO, Number(config.dias_visibilidad_publica) || DIAS_VISIBILIDAD_MINIMO),
         dias_retencion_ip_eventos: Math.max(0, Number(config.dias_retencion_ip_eventos) || 0),
+        horas_max_edicion_generado: Math.max(0, Number(config.horas_max_edicion_generado) || 0),
+        aviso_sin_completar_dias: Math.min(30, Math.max(1, Number(config.aviso_sin_completar_dias) || 2)),
       }
       const { data } = await decaService.actualizarConfiguracion(payload)
       setConfig({ ...CONFIG_VACIA, ...data })
       toast.success(t('configuracion.guardado_ok'))
-    } catch {
-      setError(t('configuracion.error_guardar'))
-      toast.error(t('configuracion.error_guardar'))
+    } catch (err) {
+      // El servidor explica por qué (ej. DeCA anticipado sin horas de corrección).
+      const motivo = err.response?.data && typeof err.response.data === 'object'
+        ? Object.values(err.response.data).flat().filter((v) => typeof v === 'string').join(' ')
+        : ''
+      setError(motivo || t('configuracion.error_guardar'))
+      toast.error(motivo || t('configuracion.error_guardar'))
     } finally {
       setSaving(false)
     }
@@ -154,6 +178,61 @@ export default function ConfiguracionDecaPage() {
         </CardContent>
       </Card>
 
+      {/* Referencia de la expedición -- pedido explícito del usuario
+          2026-09-25: no todas las empresas usan el número de albarán como
+          referencia (algunas sí), otras usan el número de CMR, y
+          otras no tienen ningún número externo propio y necesitan que
+          Appodo numere por ellas. Decide qué se usa en el asunto del email,
+          el nombre del PDF y el título del historial de auditoría -- ver
+          apps/deca/services/identificador_service.py. */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Hash className="h-4 w-4 text-[var(--color-marca)]" /> {t('configuracion.tarjeta_identificador', 'Referencia de la expedición')}
+          </CardTitle>
+          <CardDescription>
+            {t('configuracion.tarjeta_identificador_desc', 'Qué número identifica una expedición de cara al cliente: en el asunto del email, el nombre del PDF y el historial de auditoría. Si el campo elegido está vacío en una expedición concreta, se usa el siguiente disponible (albarán → CMR → contador automático), nunca se deja sin nada.')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5 max-w-md">
+            <Label htmlFor="identificador_preferido" className="text-sm text-gray-700">
+              {t('configuracion.label_identificador_preferido', 'Referencia preferida')}
+            </Label>
+            <Select value={config.identificador_preferido} onValueChange={(v) => set('identificador_preferido', v)}>
+              <SelectTrigger id="identificador_preferido" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="numero_albaran">{t('configuracion.identificador_albaran', 'Número de albarán')}</SelectItem>
+                <SelectItem value="numero_cmr">{t('configuracion.identificador_cmr', 'Número de CMR')}</SelectItem>
+                <SelectItem value="automatico">{t('configuracion.identificador_automatico', 'Contador automático de Appodo')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {config.identificador_preferido === 'automatico' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md pt-1">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-gray-500">{t('configuracion.label_prefijo_automatico', 'Prefijo')}</Label>
+                <Input
+                  value={config.prefijo_numero_automatico}
+                  onChange={(e) => set('prefijo_numero_automatico', e.target.value)}
+                  placeholder="DECA-"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-gray-500">{t('configuracion.label_ultimo_numero', 'Último número emitido')}</Label>
+                <Input value={config.ultimo_numero_automatico} disabled />
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-gray-500">
+            {t('configuracion.ayuda_identificador_automatico', 'El contador automático solo numera al Generar el DeCA (nunca en Borrador) y solo si la expedición no tiene ya un número de albarán o CMR propio.')}
+          </p>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <Card>
           <CardHeader className="pb-2">
@@ -191,6 +270,23 @@ export default function ConfiguracionDecaPage() {
                 className="w-32"
               />
               <p className="text-xs text-gray-500">{t('configuracion.ayuda_dias_retencion_ip')}</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="horas_max_edicion" className="text-sm text-gray-700">
+                {t('configuracion.label_horas_max_edicion', 'Horas para corregir un DeCA ya generado')}
+              </Label>
+              <Input
+                id="horas_max_edicion"
+                type="number"
+                min={0}
+                value={config.horas_max_edicion_generado}
+                onChange={(e) => set('horas_max_edicion_generado', e.target.value)}
+                className="w-32"
+              />
+              <p className="text-xs text-gray-500">
+                {t('configuracion.ayuda_horas_max_edicion', 'Tras generar el DeCA oficial, durante cuántas horas se puede corregir un dato mal escrito (ej. el chófer avisa al salir) sin anular la expedición. Cada corrección regenera el PDF y queda registrada con el usuario que la hizo. 0 = no se puede corregir, se bloquea al instante como antes.')}
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -259,9 +355,13 @@ export default function ConfiguracionDecaPage() {
         </Card>
       </div>
 
-      {/* Cabecera de documento controlado -- aplica al PDF de Expediciones y
-          al de la Agenda (mismos 6 campos, ConfiguracionDeca.informe_*,
-          compartidos entre ambos informes). */}
+      <PrioridadAgendaDeca config={config} set={set} />
+
+      <TrabajoCampoDeca config={config} set={set} />
+
+      {/* Cabecera de documento controlado. Aplica al
+          PDF de Expediciones y al de la Agenda (mismos 6 campos,
+          ConfiguracionDeca.informe_*, compartidos entre ambos informes). */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
@@ -309,6 +409,51 @@ export default function ConfiguracionDecaPage() {
         </CardContent>
       </Card>
 
+      {/* Plantilla del email de envío manual: el texto que va con el PDF adjunto debe poder
+          adaptarse por empresa (firma, tono propio) en vez de venir fijo.
+          Vacío = se usa el mensaje estándar. El asunto por
+          defecto es el número de albarán/expedición (el "concepto"),
+          también editable con plantilla. Mismos placeholders documentados
+          para los dos campos. */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Mail className="h-4 w-4 text-[var(--color-marca)]" /> {t('configuracion.tarjeta_plantilla_email', 'Plantilla del email de envío')}
+          </CardTitle>
+          <CardDescription>
+            {t('configuracion.tarjeta_plantilla_email_desc', 'Opcional: personaliza el asunto y el mensaje con los que se envía el DeCA por email. Vacío = se usa el mensaje estándar (asunto = referencia de la expedición, según lo elegido arriba en "Referencia de la expedición").')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="plantilla_asunto_email" className="text-sm text-gray-700">
+              {t('configuracion.label_plantilla_asunto', 'Asunto (concepto) por defecto')}
+            </Label>
+            <Input
+              id="plantilla_asunto_email"
+              value={config.plantilla_asunto_email}
+              onChange={(e) => set('plantilla_asunto_email', e.target.value)}
+              placeholder={t('configuracion.plantilla_asunto_placeholder', '{identificador}')}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="plantilla_cuerpo_email" className="text-sm text-gray-700">
+              {t('configuracion.label_plantilla_cuerpo', 'Mensaje por defecto')}
+            </Label>
+            <Textarea
+              id="plantilla_cuerpo_email"
+              rows={6}
+              value={config.plantilla_cuerpo_email}
+              onChange={(e) => set('plantilla_cuerpo_email', e.target.value)}
+              placeholder={t('configuracion.plantilla_cuerpo_placeholder', 'Adjunto el DeCA de la expedición {identificador}...')}
+            />
+          </div>
+          <p className="text-xs text-gray-500">
+            {t('configuracion.plantilla_email_placeholders', 'Placeholders disponibles: {identificador} (según lo elegido en "Referencia de la expedición") {numero_albaran} {origen} {destino} {matricula_tractor} {empresa}.')}
+          </p>
+        </CardContent>
+      </Card>
+
       {/* TODO(standalone): tarjeta "Repositorio y custodia legal" (Google
           Drive) del ERP origen eliminada aquí -- ver comentario al inicio
           del archivo. Si se necesita custodia legal externa del DeCA
@@ -323,6 +468,10 @@ export default function ConfiguracionDecaPage() {
           {saving ? t('configuracion.btn_guardando') : t('configuracion.btn_guardar')}
         </Button>
       </div>
+
+      {/* Guarda por su cuenta (no depende del botón de arriba). */}
+      <PlantillasDocumentoDeca />
+      <PrecisionLecturaDeca />
     </div>
   )
 }

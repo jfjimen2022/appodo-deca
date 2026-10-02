@@ -21,7 +21,53 @@ from pypdf import PdfReader, PdfWriter
 # diferencia de un teléfono de 9 dígitos, que sí) -- DNI acaba en letra, NIE
 # empieza por X/Y/Z, CIF empieza siempre por letra. Ver core_utils/validadores_fiscales.py.
 PATRON_NIF = re.compile(r'\b(?:\d{8}[A-Z]|[XYZ]\d{7}[A-Z]|[ABCDEFGHJKLMNPQRSUVW]\d{7}[0-9A-J])\b')
-PATRON_MATRICULA = re.compile(r'\b\d{4}[A-Z]{3}\b')
+# Matrículas que se reconocen en el texto (2026-10-01). Desde v4.32.1 el campo
+# admite CUALQUIER matrícula (actual, de remolque, antigua y extranjera: ver
+# serializers._RE_MATRICULA); la lectura debe ir igual de lejos sin confundir
+# pedidos o referencias con matrículas, así que:
+#  1. Española actual, en cualquier parte del texto: 1234BCD, y con la "R"
+#     delante si es un remolque (R1234BCD: la R es parte de la matrícula).
+#     Letras sin vocales, Ñ ni Q, como las matrículas de verdad.
+#  2. Española antigua provincial, en cualquier parte: CA1234AB, M-1234-AB.
+#  3. CUALQUIER formato (extranjeras incluidas) cuando va junto a la palabra
+#     "matrícula" o equivalente en otros idiomas (CMR internacionales).
+# Se aceptan los separadores habituales ("R-1234-BCD", "1234 BCD"). Lo que no
+# encaje aquí lo lee la IA; y a mano el campo acepta cualquier formato.
+PATRON_MATRICULA = re.compile(r'(?<![A-Z0-9])(R?)[ -]?(\d{4})[ -]?([BCDFGHJKLMNPRSTVWXYZ]{3})(?![A-Z0-9])')
+PATRON_MATRICULA_ANTIGUA = re.compile(r'(?<![A-Z0-9])([A-Z]{1,2})[ -]?(\d{4})[ -]?([A-Z]{1,2})(?![A-Z0-9])')
+PATRON_MATRICULA_ETIQUETADA = re.compile(
+    r'(?:MATR[IÍ]CULAS?|MATR\.|MAT\.|PLATE|LICEN[CS]E PLATE|KENNZEICHEN|IMMATRICULATION|TARGA)'
+    r'[^:\n]{0,30}:\s*([A-Z0-9][A-Z0-9 /-]{2,30}[A-Z0-9])'
+)
+_PROVINCIAS_ANTIGUAS = {
+    'A', 'AB', 'AL', 'AV', 'B', 'BA', 'BI', 'BU', 'C', 'CA', 'CC', 'CE', 'CO', 'CR', 'CS', 'CU', 'GC', 'GE',
+    'GI', 'GR', 'GU', 'H', 'HU', 'IB', 'J', 'L', 'LE', 'LO', 'LU', 'M', 'MA', 'ML', 'MU', 'NA', 'O', 'OR',
+    'OU', 'P', 'PM', 'PO', 'S', 'SA', 'SE', 'SG', 'SO', 'SS', 'T', 'TE', 'TF', 'TO', 'V', 'VA', 'VI', 'Z', 'ZA',
+}
+_RE_FORMATO_LIBRE = re.compile(r'^(?=.*[A-Z])(?=.*\d)[A-Z0-9]{4,10}$')
+
+
+def _matriculas_del_texto(texto: str) -> list[str]:
+    encontradas: list[str] = []
+
+    def anotar(valor: str) -> None:
+        valor = re.sub(r'[\s-]', '', valor)
+        if valor and valor not in encontradas:
+            encontradas.append(valor)
+
+    for remolque, numeros, letras in PATRON_MATRICULA.findall(texto):
+        anotar(f'{remolque}{numeros}{letras}')
+    for provincia, numeros, letras in PATRON_MATRICULA_ANTIGUA.findall(texto):
+        if provincia in _PROVINCIAS_ANTIGUAS:
+            anotar(f'{provincia}{numeros}{letras}')
+    for valor in PATRON_MATRICULA_ETIQUETADA.findall(texto):
+        # Puede traer dos juntas ("R6152BDV - 5038LZN") o texto detrás: se
+        # parte por los separadores fuertes y se queda lo que parezca matrícula.
+        for trozo in re.split(r'\s+[-/,]\s+|\s{2,}|\s+Y\s+', valor):
+            limpio = re.sub(r'[\s-]', '', trozo)
+            if _RE_FORMATO_LIBRE.match(limpio):
+                anotar(limpio)
+    return encontradas
 # Un albarán/CMR real usa notación española: punto de millar, coma decimal
 # ("116.969,00"). El peso TOTAL real en estos documentos casi siempre lleva
 # decimales ("577,50"); un entero suelto seguido de "Kg" es casi siempre
@@ -32,9 +78,28 @@ _NUMERO_ES_CON_DECIMAL = r'\d{1,3}(?:\.\d{3})*,\d+'
 PATRON_PESO = re.compile(rf'({_NUMERO_ES_CON_DECIMAL})[ \t]*(?:kg|kilos|kilogramos)\b', re.IGNORECASE)
 # `[ \t]*` (nunca `\s*`) a propósito: `\s` incluye el salto de línea, y en
 # una tabla convertida a texto plano eso enlaza dos celdas de filas/columnas
-# distintas que no tienen relación.
+# distintas que no tienen relación -- bug real encontrado con el mismo CMR:
+# "577,50\nPalets: ..." hacía que el "50" de los céntimos del peso neto se
+# leyera como "50 palets" (cuando en realidad eran 80 bultos, en otra
+# celda de la tabla, varias líneas más abajo).
+# Línea de totales de una tabla de albarán. En un PDF real de
+# albarán sale como "Suma : 14,0 117.347,00116.969,00 24,971.44" -- con el bruto y
+# el neto PEGADOS, ver _numeros_es_de_linea.
+PATRON_LINEA_TOTAL = re.compile(r'^[ \t]*(?:suma|totales?)\b[^\n]*', re.IGNORECASE | re.MULTILINE)
+_PREFIJO_NUMERO_ES = re.compile(r'\d{1,3}(?:\.\d{3})*,\d{2}')
 PATRON_BULTOS = re.compile(r'(\d+)[ \t]*(?:bultos|bulto|palets?|cajas?)', re.IGNORECASE)
 PATRON_FECHA = re.compile(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?:\s+\d{1,2}:\d{2})?')
+# Red de seguridad para cuando la IA (de visión o de texto) se salta el
+# conductor pese a estar impreso con claridad -- bug real 2026-09-25, un
+# ticket con "Conductor: PEDRO GARCIA LOPEZ   NIF: 12345678Z" no lo
+# reconoció ni Gemini. Solo funciona con documentos que traen la etiqueta
+# LITERAL "Conductor" seguida del NIF/DNI en la misma línea -- no cubre
+# fotos sin capa de texto (esas dependen solo de la IA de visión) ni
+# documentos donde el conductor solo aparece en una firma manuscrita.
+PATRON_CONDUCTOR = re.compile(
+    r'Conductor\s*:?\s*([A-ZÁÉÍÓÚÑa-záéíóúñ][A-ZÁÉÍÓÚÑa-záéíóúñ \.]+?)\s+'
+    r'(?:NIF|DNI|NIE)\s*:?\s*(\d{8}[A-Z]|[XYZ]\d{7}[A-Z])',
+)
 
 # Formatos de fecha que puede traer un albarán/CMR español (con o sin hora,
 # con / o con -). El formulario espera un datetime ISO parseable por
@@ -94,6 +159,24 @@ def extraer_texto_por_pagina(archivo) -> list[str]:
     return [pagina.extract_text() or '' for pagina in paginas]
 
 
+def extraer_texto_maquetado(archivo) -> str:
+    """Texto respetando la posición en la hoja (una fila de la tabla = una
+    línea). El modo normal de pypdf desordena las celdas: en el albarán de
+    Frutas del Sur la fila de totales sale como "24,971.44116.969,0014,0
+    117.347,00Suma:". Solo se usa para el peso; los demás campos siguen con
+    el texto normal, sobre el que ya están afinados. '' si falla."""
+    try:
+        if hasattr(archivo, 'seek'):
+            archivo.seek(0)
+        reader = PdfReader(archivo)
+        return '\n'.join(
+            pagina.extract_text(extraction_mode='layout') or ''
+            for pagina in reader.pages[:MAXIMO_PAGINAS_A_PROCESAR]
+        )
+    except Exception:
+        return ''
+
+
 def identificar_tipo_documento(texto_pagina: str) -> str | None:
     """Heurística por palabras clave en la cabecera de la página. None si no reconoce nada -- nunca inventa un tipo por descarte."""
     cabecera = unicodedata.normalize('NFKD', texto_pagina[:LONGITUD_CABECERA])
@@ -135,26 +218,70 @@ def dividir_pdf_por_grupos(archivo, grupos: list[tuple[str, list[int]]]) -> list
     return resultado
 
 
-def extraer_campos(texto: str) -> dict[str, str | None]:
+def _trocear_numeros_es(token: str) -> list[str] | None:
+    """"117.347,00116.969,00" -> ["117.347,00", "116.969,00"]. None si el
+    token no es EXACTAMENTE una sucesión de números españoles con dos
+    decimales ("24,971.44" -> None, no se trocea en "24,97" + basura)."""
+    if not token:
+        return []
+    for fin in range(len(token), 0, -1):
+        if _PREFIJO_NUMERO_ES.fullmatch(token[:fin]):
+            resto = _trocear_numeros_es(token[fin:])
+            if resto is not None:
+                return [token[:fin], *resto]
+    return None
+
+
+def _numeros_es_de_linea(linea: str) -> list[float]:
+    numeros: list[float] = []
+    for token in linea.split():
+        for numero in _trocear_numeros_es(token) or []:
+            numeros.append(float(_normalizar_numero_es(numero)))
+    return numeros
+
+
+def _peso_total(texto: str) -> str | None:
+    """Peso NETO total del envío, o None si no se puede saber con seguridad.
+
+    Bug real (albarán de Frutas del Sur, 2026-09-27): con dos líneas de
+    producto se cogía el peso de la PRIMERA línea (49.467 kg de nabo) en vez
+    del total neto (116.969 kg). Orden de preferencia:
+    1. Línea de totales ("Suma"/"Total") con una pareja bruto-neto
+       consecutiva: el neto es el segundo y nunca supera al bruto.
+    2. Un único peso "N,NN kg" en todo el documento.
+    3. Varios pesos distintos sin línea de totales -> None: la IA lo
+       completa. Mejor vacío que el peso de una sola línea de producto."""
+    for linea in PATRON_LINEA_TOTAL.findall(texto):
+        numeros = _numeros_es_de_linea(linea)
+        for bruto, neto in zip(numeros, numeros[1:]):
+            if 0 < neto <= bruto and neto >= bruto * 0.5:
+                return f'{neto:.2f}'
+
+    pesos = list(dict.fromkeys(_normalizar_numero_es(m) for m in PATRON_PESO.findall(texto)))
+    if len(pesos) == 1:
+        return pesos[0]
+    return None
+
+
+def extraer_campos(texto: str, texto_maquetado: str = '') -> dict[str, str | None]:
     """Adivina campos del DeCA a partir del texto completo del/de los documento(s). No distingue quién es cada NIF/matrícula -- eso lo decide el humano al revisar."""
     nifs_encontrados: list[str] = []
     for match in PATRON_NIF.findall(texto.upper()):
         if match not in nifs_encontrados:
             nifs_encontrados.append(match)
 
-    matriculas_encontradas: list[str] = []
-    for match in PATRON_MATRICULA.findall(texto.upper()):
-        if match not in matriculas_encontradas:
-            matriculas_encontradas.append(match)
+    matriculas_encontradas = _matriculas_del_texto(texto.upper())
 
-    peso_match = PATRON_PESO.search(texto)
     bultos_match = PATRON_BULTOS.search(texto)
     fecha_match = PATRON_FECHA.search(texto)
+    conductor_match = PATRON_CONDUCTOR.search(texto)
 
     return {
         'nifs_encontrados': nifs_encontrados,
         'matriculas_encontradas': matriculas_encontradas,
-        'peso_kg': _normalizar_numero_es(peso_match.group(1)) if peso_match else None,
+        'peso_kg': _peso_total(texto_maquetado or texto),
         'bultos': bultos_match.group(1) if bultos_match else None,
         'fecha_hora_transporte': _normalizar_fecha_es(fecha_match.group(0)) if fecha_match else None,
+        'nombre_conductor': conductor_match.group(1).strip() if conductor_match else None,
+        'nif_conductor': conductor_match.group(2) if conductor_match else None,
     }

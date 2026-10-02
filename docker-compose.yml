@@ -27,6 +27,24 @@ services:
       db:
         condition: service_healthy
 
+  # Tareas programadas: aviso a los administradores de DeCA hechos sin
+  # cobertura que siguen sin completar, y purga de IPs antiguas del
+  # historial. Misma imagen que el backend, en bucle cada hora (los dos
+  # comandos son idempotentes: avisan/purgan una sola vez cada cosa).
+  scheduler:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+    entrypoint: ["sh", "-c", "sleep 60; while true; do python manage.py avisar_deca_sin_completar; python manage.py purgar_ips_eventos_deca; sleep 3600; done"]
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
+
   frontend:
     build:
       context: ./frontend

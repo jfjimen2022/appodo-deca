@@ -14,6 +14,7 @@ from django.utils import timezone
 from deca.models import (
     DIAS_RETENCION_IP_EVENTOS_DEFECTO,
     DIAS_VISIBILIDAD_PUBLICA_DEFECTO,
+    HORAS_MAX_EDICION_GENERADO_DEFECTO,
     ConfiguracionDeca,
     ExpedicionDeca,
 )
@@ -59,6 +60,54 @@ def guardar_pdf_generado(expedicion: ExpedicionDeca, contenido_pdf: bytes) -> Ex
         'fecha_expiracion_publica', 'estado', 'fecha_actualizacion',
     ])
     return expedicion
+
+
+def regenerar_pdf_tras_correccion(expedicion: ExpedicionDeca, contenido_pdf: bytes) -> ExpedicionDeca:
+    """Reemplaza el PDF de una expedición YA GENERADA tras corregir un dato
+    dentro del plazo de gracia (`ConfiguracionDeca.horas_max_edicion_generado`,
+    ver `puede_editar_generado`). A diferencia de `guardar_pdf_generado`,
+    NO toca `fecha_generacion` -- el plazo de corrección se cuenta siempre
+    desde la primera generación, nunca se alarga al corregir -- ni
+    `fecha_expiracion_publica`, que ya quedó fijada la primera vez. El mismo
+    QR/token público sigue sirviendo, ahora con el contenido correcto."""
+    expedicion.pdf_generado.save(
+        f'DECA_{expedicion.id}.pdf', ContentFile(contenido_pdf), save=False,
+    )
+    expedicion.hash_sha256 = hashlib.sha256(contenido_pdf).hexdigest()
+    expedicion.save(update_fields=['pdf_generado', 'hash_sha256', 'fecha_actualizacion'])
+    return expedicion
+
+
+def horas_max_edicion_generado_de(empresa) -> int:
+    """Igual que `dias_visibilidad_publica_de` -- sin fila de configuración
+    todavía, cae al valor por defecto."""
+    config = ConfiguracionDeca.objects.filter(pk=1).first()
+    if config is not None:
+        return config.horas_max_edicion_generado
+    return HORAS_MAX_EDICION_GENERADO_DEFECTO
+
+
+def fecha_limite_edicion(expedicion: ExpedicionDeca):
+    """Instante hasta el que se puede corregir `expedicion` una vez generada,
+    o None si nunca se generó. Ver `puede_editar_generado`."""
+    if not expedicion.fecha_generacion:
+        return None
+    horas = horas_max_edicion_generado_de(None)
+    return expedicion.fecha_generacion + timedelta(hours=horas)
+
+
+def puede_editar_generado(expedicion: ExpedicionDeca) -> bool:
+    """True si una expedición GENERADA todavía está dentro del plazo de
+    gracia para corregir un dato sin anular. Fuera de ese plazo (u
+    horas_max_edicion_generado=0), queda inmutable como siempre."""
+    if expedicion.estado != ExpedicionDeca.Estado.GENERADO:
+        return False
+    limite = fecha_limite_edicion(expedicion)
+    if limite is None:
+        return False
+    # Standalone: una sola zona horaria (settings.TIME_ZONE), en vez de la
+    # de cada empresa del ERP origen (core.tiempo_empresa.ahora_para).
+    return timezone.now() <= limite
 
 
 def acceso_publico_vigente(expedicion: ExpedicionDeca) -> bool:

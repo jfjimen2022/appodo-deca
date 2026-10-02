@@ -1,6 +1,11 @@
 from django.contrib import admin
 
 from .models import (
+    AliasAgendaDeca,
+    CargadorDeca,
+    LecturaCampoDeca,
+    ModificacionDeca,
+    PlantillaDocumentoDeca,
     ConductorDeca,
     ConfiguracionDeca,
     DestinatarioDeca,
@@ -44,3 +49,8 @@ admin.site.register(TractoraDeca)
 admin.site.register(RemolqueDeca)
 admin.site.register(DestinatarioDeca)
 admin.site.register(EmpresaTransportistaDeca)
+admin.site.register(CargadorDeca)
+admin.site.register(ModificacionDeca)
+admin.site.register(PlantillaDocumentoDeca)
+admin.site.register(LecturaCampoDeca)
+admin.site.register(AliasAgendaDeca)

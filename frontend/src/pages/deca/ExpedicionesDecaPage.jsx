@@ -21,6 +21,7 @@ import ColumnPickerPanel from '../../components/ui/ColumnPickerPanel'
 import { useColumnasVisibles } from '../../hooks/useColumnasVisibles'
 import { SmartSearch } from '../../components/ui/SmartSearch'
 import EnviarEmailDecaDialog from '../../components/deca/EnviarEmailDecaDialog'
+import PendientesSinConexionDeca from '../../components/deca/PendientesSinConexionDeca'
 import { useToast } from '../../context/ToastContext'
 import { formatDate } from '../../lib/utils'
 
@@ -31,6 +32,8 @@ const ESTADO_BADGE = {
   confirmado: { variant: 'default' },
   generado: { variant: 'success' },
   anulado: { variant: 'destructive' },
+  // DeCA del talonario de papel registrado con su foto (sin PDF ni QR).
+  papel: { variant: 'outline' },
 }
 
 function formatFechaHora(value, locale) {
@@ -59,6 +62,7 @@ export default function ExpedicionesDecaPage() {
       { id: 'estado_confirmado', label: t('lista.filtro_confirmado'), field: 'estado', value: 'confirmado' },
       { id: 'estado_generado', label: t('lista.filtro_generado'), field: 'estado', value: 'generado' },
       { id: 'estado_anulado', label: t('lista.filtro_anulado'), field: 'estado', value: 'anulado' },
+      { id: 'estado_papel', label: t('lista.filtro_papel'), field: 'estado', value: 'papel' },
     ],
   }
 
@@ -254,7 +258,12 @@ export default function ExpedicionesDecaPage() {
             </DropdownMenuItem>
           </>
         )}
-        {exp.estado !== 'anulado' && (
+        {/* Anular = "esto se emitió oficialmente y se cancela" -- un
+            borrador nunca llegó a confirmarse ni generarse, así que ese
+            concepto no aplica (2026-09-25; el backend también lo rechaza,
+            ver AnularExpedicionDecaView). Para descartar un borrador está
+            "Borrar borrador" más abajo. */}
+        {exp.estado !== 'anulado' && exp.estado !== 'borrador' && (
           <DropdownMenuItem onClick={() => abrirDialogAnular(exp)} className="gap-2 cursor-pointer text-red-600">
             <Ban className="h-4 w-4" /> {t('lista.btn_anular')}
           </DropdownMenuItem>
@@ -391,6 +400,8 @@ export default function ExpedicionesDecaPage() {
         </h1>
       </div>
 
+      <PendientesSinConexionDeca onRegistrados={cargar} />
+
       <Card className="p-3 border-gray-100 shadow-sm flex items-center gap-2 flex-wrap shrink-0">
         <div className="flex items-center gap-2 flex-wrap">
           <SmartSearch
@@ -494,9 +505,12 @@ export default function ExpedicionesDecaPage() {
       {total > 0 && (
         <div className="flex items-center justify-between text-sm text-gray-600 flex-wrap gap-2 shrink-0">
           <div className="flex items-center gap-2">
-            <span className="text-gray-500">{t('lista.filas_label')}</span>
+            {/* WCAG: el selector necesita nombre accesible (antes era un
+                combobox mudo) y los textos del pie, contraste >= 4.5:1 sobre
+                el fondo del listado (gray-500/400 se quedaban en 4.4 y 2.3). */}
+            <span id="deca-filas-label" className="text-gray-700">{t('lista.filas_label')}</span>
             <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1) }}>
-              <SelectTrigger className="h-8 w-20 text-xs">
+              <SelectTrigger className="h-8 w-20 text-xs" aria-labelledby="deca-filas-label">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -505,15 +519,15 @@ export default function ExpedicionesDecaPage() {
                 <SelectItem value="100">100</SelectItem>
               </SelectContent>
             </Select>
-            <span className="text-gray-400">{t('lista.total_expediciones', { total })}</span>
+            <span className="text-gray-600">{t('lista.total_expediciones', { total })}</span>
           </div>
           {totalPages > 1 && (
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} aria-label={t('lista.pagina_anterior')}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="px-2">{t('lista.paginacion', { page, totalPages })}</span>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} aria-label={t('lista.pagina_siguiente')}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>

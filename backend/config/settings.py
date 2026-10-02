@@ -30,6 +30,13 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 # informes exportados y en el email de envío). Ver deca/reportes.py,
 # deca/services/pdf_service.py y deca/services/email_service.py.
 EMPRESA_NOMBRE = env('EMPRESA_NOMBRE', default='')
+# NIF/CIF de la empresa de la instalación (opcional): si su papel habitual es
+# transportista, el formulario lo precarga; y al leer un documento se descarta
+# como NIF de terceros.
+EMPRESA_NIF = env('EMPRESA_NIF', default='')
+# Domicilio de la empresa en una línea (opcional): domicilio del cargador
+# cuando el transporte lo contrata la propia empresa.
+EMPRESA_DOMICILIO = env('EMPRESA_DOMICILIO', default='')
 
 INSTALLED_APPS = [
     'django.contrib.admin',

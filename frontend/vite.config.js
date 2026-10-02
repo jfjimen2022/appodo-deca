@@ -1,13 +1,28 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
-// Standalone Appodo DeCa: sin PWA/service worker (eso era específico del ERP
-// origen para fichaje offline, no aplica aquí). Proxy de /api al backend
-// Django en dev; en build real se usa VITE_API_URL (ver .env.example) o el
-// mismo origen si el backend sirve el SPA detrás del mismo dominio/nginx.
+// PWA mínima para el DeCA sin cobertura: nuestro src/sw.js está escrito a mano
+// (sincronización de la cola de DeCA hechos sin red); el modo injectManifest
+// solo le inyecta la lista de precarga del build, no genera un SW nuevo.
+// Proxy de /api al backend Django en dev; en build real se usa VITE_API_URL
+// (ver .env.example) o el mismo origen si nginx hace de proxy (lo normal).
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
+      injectManifest: {
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+      },
+      manifest: false, // se sirve public/manifest.json tal cual
+      injectRegister: null, // el registro se hace a mano en src/main.jsx
+      devOptions: { enabled: false },
+    }),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
