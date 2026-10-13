@@ -20,11 +20,13 @@ import {
 import {
   Truck, Plus, FileEdit, MoreVertical, Eye, Ban, Lock, LockOpen,
   ChevronLeft, ChevronRight, Loader2, MoreHorizontal, FileText, FileSpreadsheet, Trash2,
-  Download, Copy, Mail, Columns,
+  Download, Copy, Mail, Columns, AlertTriangle, Plug,
 } from 'lucide-react'
 import SortableHeader from '../../components/ui/SortableHeader'
 import ColumnPickerPanel from '../../components/ui/ColumnPickerPanel'
 import { useColumnasVisibles } from '../../hooks/useColumnasVisibles'
+import { useAutoRefresh } from '../../hooks/useAutoRefresh'
+import IndicadorActualizado from '../../components/ui/IndicadorActualizado'
 import { SmartSearch } from '../../components/ui/SmartSearch'
 import EnviarEmailDecaDialog from '../../components/deca/EnviarEmailDecaDialog'
 import PendientesSinConexionDeca from '../../components/deca/PendientesSinConexionDeca'
@@ -69,6 +71,11 @@ export default function ExpedicionesDecaPage() {
       { id: 'estado_generado', label: t('lista.filtro_generado'), field: 'estado', value: 'generado' },
       { id: 'estado_anulado', label: t('lista.filtro_anulado'), field: 'estado', value: 'anulado' },
       { id: 'estado_papel', label: t('lista.filtro_papel'), field: 'estado', value: 'papel' },
+      // Integración con el ERP: de dónde viene y qué revisar.
+      { id: 'origen_erp', label: t('lista.filtro_origen_erp'), field: 'origen', value: 'erp' },
+      { id: 'origen_appodo', label: t('lista.filtro_origen_appodo'), field: 'origen', value: 'appodo' },
+      { id: 'modificado_erp', label: t('lista.filtro_modificado_erp'), field: 'modificado_erp', value: 'true' },
+      { id: 'incompletas', label: t('lista.filtro_incompletas'), field: 'incompletas', value: 'true' },
     ],
   }
 
@@ -86,6 +93,8 @@ export default function ExpedicionesDecaPage() {
     // anotar la query.
     { id: 'acceso_publico', labelKey: 'col_acceso_publico', defaultVisible: true, numeric: true },
     { id: 'creado_por', labelKey: 'col_creado_por', defaultVisible: false },
+    // Referencia del envío en el ERP (solo los recibidos por la integración).
+    { id: 'referencia_externa', labelKey: 'col_referencia_externa', defaultVisible: false, sortField: 'referencia_externa' },
   ]
 
   const [expediciones, setExpediciones] = useState([])
@@ -130,10 +139,19 @@ export default function ExpedicionesDecaPage() {
     return params
   }, [searchState])
 
-  const cargar = useCallback(async () => {
+  const [ultimaActualizacion, setUltimaActualizacion] = useState(null)
+  const [refrescando, setRefrescando] = useState(false)
+
+  // `silencioso`: refresco automático o manual sobre la lista ya pintada --
+  // sin spinner (desmontaría la tabla y perdería el scroll) y sin tapar la
+  // lista con un error si falla una vez: la próxima vuelta lo reintenta.
+  const cargar = useCallback(async ({ silencioso = false } = {}) => {
     const seq = ++cargarSeqRef.current
-    setLoading(true)
-    setError('')
+    if (silencioso) setRefrescando(true)
+    else {
+      setLoading(true)
+      setError('')
+    }
     try {
       const params = { ...filtrosActivos(), page, page_size: pageSize }
       if (ordering?.field) params.ordering = ordering.dir === 'desc' ? `-${ordering.field}` : ordering.field
@@ -141,15 +159,32 @@ export default function ExpedicionesDecaPage() {
       if (seq !== cargarSeqRef.current) return
       setExpediciones(data.results ?? data)
       setTotal(data.count ?? (Array.isArray(data) ? data.length : 0))
+      setError('')
+      setUltimaActualizacion(new Date())
     } catch (err) {
       if (seq !== cargarSeqRef.current) return
-      setError(err.response?.status === 403 ? t('lista.error_403') : t('lista.error_cargar'))
+      if (!silencioso) setError(err.response?.status === 403 ? t('lista.error_403') : t('lista.error_cargar'))
     } finally {
-      if (seq === cargarSeqRef.current) setLoading(false)
+      // Siempre ambos: un refresco silencioso puede adelantar a una carga
+      // normal en vuelo, y entonces es él quien debe quitar el spinner.
+      if (seq === cargarSeqRef.current) {
+        setLoading(false)
+        setRefrescando(false)
+      }
     }
   }, [page, pageSize, ordering, filtrosActivos, t])
 
   useEffect(() => { cargar() }, [cargar])
+
+  const refrescarSilencioso = useCallback(() => cargar({ silencioso: true }), [cargar])
+
+  // Otro usuario (o el mismo en otra pestaña) crea una expedición: que aparezca
+  // sin F5. Pausado mientras hay un diálogo abierto o una acción en curso, para
+  // no cambiar la lista debajo de quien está trabajando en ella.
+  useAutoRefresh(refrescarSilencioso, {
+    pausado: (modulosActivos.length > 0 && !activo) || loading || exportando || panelOpen
+      || !!procesandoAccionId || !!expedicionAnular || !!expedicionBorrar || !!expedicionEmail,
+  })
 
   useEffect(() => { setPage(1) }, [searchState])
 
@@ -308,14 +343,38 @@ export default function ExpedicionesDecaPage() {
     )
   }
 
+  // El ERP cambió el envío después de emitir el DeCA (no se ha aplicado).
+  // Texto visible, no solo color (WCAG: el color nunca es la única pista).
+  const EtiquetaCambiosErp = ({ exp }) => (exp.cambios_erp?.length ? (
+    <span
+      className="inline-flex items-center gap-1 rounded-full border border-red-300 bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-800"
+      title={t('erp.etiqueta_titulo')}
+    >
+      <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />{t('erp.etiqueta')}
+    </span>
+  ) : null)
+
+  // Llegó del ERP y sigue en borrador: alguien tiene que completarlo antes de
+  // que salga el camión. Fondo rojo + etiqueta con texto (no solo color).
+  const pendienteErp = (exp) => Boolean(exp.recibida_de) && exp.estado === 'borrador'
+  const EtiquetaPendienteErp = ({ exp }) => (pendienteErp(exp) ? (
+    <span className="inline-flex items-center gap-1 rounded-full border border-red-300 bg-white px-2 py-0.5 text-xs font-semibold text-red-800">
+      <Plug className="h-3.5 w-3.5" aria-hidden="true" />{t('erp.etiqueta_pendiente', 'Del ERP · por completar')}
+    </span>
+  ) : null)
+
   const renderColCelda = (col, exp) => {
     switch (col.id) {
       case 'estado':
         return (
           <td key={col.id} className="px-4 py-3.5">
-            <Badge variant={ESTADO_BADGE[exp.estado]?.variant || 'secondary'}>
-              {t(`lista.estado_${exp.estado}`)}
-            </Badge>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant={ESTADO_BADGE[exp.estado]?.variant || 'secondary'}>
+                {t(`lista.estado_${exp.estado}`)}
+              </Badge>
+              <EtiquetaCambiosErp exp={exp} />
+              <EtiquetaPendienteErp exp={exp} />
+            </div>
           </td>
         )
       case 'nombre_cargador':
@@ -337,7 +396,14 @@ export default function ExpedicionesDecaPage() {
           </td>
         )
       case 'creado_por':
-        return <td key={col.id} className="px-4 py-3.5 text-gray-500">{exp.creado_por || '—'}</td>
+        // Lo recibido por la integración no lo creó una persona: se dice de dónde vino.
+        return (
+          <td key={col.id} className="px-4 py-3.5 text-gray-500">
+            {exp.creado_por || (exp.recibida_de ? t('lista.creado_por_erp', { nombre: exp.recibida_de }) : '—')}
+          </td>
+        )
+      case 'referencia_externa':
+        return <td key={col.id} className="px-4 py-3.5 text-gray-600 font-mono text-xs">{exp.referencia_externa || '—'}</td>
       default:
         return <td key={col.id} className="px-4 py-3.5" />
     }
@@ -346,7 +412,9 @@ export default function ExpedicionesDecaPage() {
   const renderFila = (exp) => (
     <tr
       key={exp.id}
-      className="border-b last:border-0 odd:bg-white even:bg-gray-50/60 hover:bg-gray-100 transition-colors cursor-pointer"
+      className={`border-b last:border-0 transition-colors cursor-pointer ${pendienteErp(exp)
+        ? 'bg-red-50 hover:bg-red-100 shadow-[inset_4px_0_0_0_rgb(220_38_38)]'
+        : 'odd:bg-white even:bg-gray-50/60 hover:bg-gray-100'}`}
       onClick={() => navigate(`/deca/${exp.id}`)}
     >
       <td className="px-4 py-3.5 font-medium text-gray-900">{exp.numero_albaran || '—'}</td>
@@ -375,7 +443,9 @@ export default function ExpedicionesDecaPage() {
         }
       }}
       aria-label={`${t('lista.col_numero')} ${exp.numero_albaran || '—'}`}
-      className="w-full text-left flex items-stretch border-b last:border-0 active:bg-gray-50 cursor-pointer"
+      className={`w-full text-left flex items-stretch border-b last:border-0 cursor-pointer ${pendienteErp(exp)
+        ? 'bg-red-50 active:bg-red-100 border-l-4 border-l-red-600'
+        : 'active:bg-gray-50'}`}
     >
       <div className="flex-1 min-w-0 px-4 py-3 flex flex-col gap-1">
         <div className="flex items-center gap-2 flex-wrap">
@@ -383,6 +453,8 @@ export default function ExpedicionesDecaPage() {
           <Badge variant={ESTADO_BADGE[exp.estado]?.variant || 'secondary'}>
             {t(`lista.estado_${exp.estado}`)}
           </Badge>
+          <EtiquetaCambiosErp exp={exp} />
+          <EtiquetaPendienteErp exp={exp} />
           {exp.acceso_publico_vigente
             ? <LockOpen className="h-3.5 w-3.5 text-emerald-600" />
             : <Lock className="h-3.5 w-3.5 text-gray-400" />}
@@ -454,6 +526,7 @@ export default function ExpedicionesDecaPage() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
+          <IndicadorActualizado fecha={ultimaActualizacion} onRefrescar={refrescarSilencioso} refrescando={refrescando} />
           <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate('/deca/nuevo?manual=1')}>
             <FileEdit className="h-4 w-4" />
             {t('lista.btn_manual')}
@@ -485,7 +558,8 @@ export default function ExpedicionesDecaPage() {
               {/* Tabla -- SOLO tablet/escritorio */}
               <div className="hidden md:block overflow-x-auto flex-1 min-h-0 overflow-y-auto" tabIndex={0} role="region" aria-label="Tabla con desplazamiento horizontal">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-[var(--color-marca)]/[0.06] z-10">
+                  {/* Fondo opaco: con el tinte solo (6 %), las filas se veían a través al hacer scroll. */}
+                  <thead className="sticky top-0 z-10 bg-white bg-[linear-gradient(rgb(var(--color-marca-rgb)/0.06),rgb(var(--color-marca-rgb)/0.06))]">
                     <tr className="border-b-2 border-[rgb(var(--color-marca-rgb)/0.25)]">
                       <SortableHeader label={t('lista.col_numero')} field="numero_albaran" ordering={ordering} onSort={handleSort} className={TH_BASE} />
                       {columnasActivas.map(renderColHeader)}

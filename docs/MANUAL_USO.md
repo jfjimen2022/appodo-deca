@@ -245,10 +245,24 @@ un documento y aplica sus instrucciones de lectura y sus valores fijos
 
 ## 8. Expediciones, ficha de detalle y estados
 
-**Expediciones** es la lista de todos los DeCA: buscador, filtros por
-estado, columnas configurables y ordenables, paginación y **Más acciones**
-para exportar a PDF o Excel respetando filtros y orden. Arriba aparecen los
-DeCA hechos sin cobertura pendientes de registrar en este móvil.
+**Expediciones** es la lista de todos los DeCA: buscador (por nº de albarán
+o por referencia del ERP), filtros por estado, columnas configurables y
+ordenables, paginación y **Más acciones** para exportar a PDF o Excel
+respetando filtros y orden. La lista se refresca sola cada poco (arriba se ve
+cuándo se actualizó). Arriba aparecen también los DeCA hechos sin cobertura
+pendientes de registrar en este móvil.
+
+Si la empresa conecta su ERP ([`INTEGRACION_ERP.md`](INTEGRACION_ERP.md)),
+hay además filtros **Recibidos del ERP / Hechos a mano**, **Modificados en el
+ERP** y **Les falta algún dato**. Los borradores que llegan del ERP salen en
+rojo: complétalos y genera desde ellos, no hagas otro DeCA a mano (si ya lo
+hiciste, el ERP lo reconoce por el nº de albarán y no lo duplica). Un DeCA
+generado que el ERP cambia después lleva la etiqueta roja **«Modificado en el
+ERP»**: en su ficha se ve cada diferencia; corrígelo (en plazo y con motivo),
+anúlalo o **descarta el aviso** si el cambio no afecta al transporte.
+
+**Peso neto y bruto**: el DeCA lleva los dos en la misma línea (*Peso neto …
+Peso bruto …*). Basta con uno de los dos para generar.
 
 La **ficha de detalle** (expediciones generadas, anuladas o en papel)
 muestra los datos, los documentos origen, los transportistas sucesivos, el
@@ -262,9 +276,16 @@ envíos por email, anulación) con fecha y usuario. El historial se exporta a
 |---|---|
 | **Borrador** | Editar todo, subir documentos, confirmar, borrar. |
 | **Confirmado** | Generar el DeCA, editar (vuelve a borrador), anular. |
-| **Generado** | Descargar, copiar enlace, enviar por email, corregir dentro del plazo (con motivo), anular. |
+| **Generado** | Descargar, copiar enlace, enviar por email, corregir dentro del plazo (con motivo), anular, **adjuntar documentos** (p. ej. el CMR firmado que vuelve con el camión: no se lee, no cambia el PDF ni el QR y no se puede quitar después). |
 | **DeCA en papel** | Solo lectura: un DeCA del talonario registrado por foto (ver Configuración). No tiene PDF ni QR de la aplicación. |
 | **Anulado** | Solo lectura. Se puede borrar solo si nunca llegó a generarse el PDF oficial. |
+
+Generar y corregir son **todo o nada**: si falla algo a mitad (el PDF, el
+almacenamiento), no queda nada a medias ni se gasta un número del contador.
+
+**Borrar** solo se puede un borrador, o uno anulado que nunca llegó a
+generarse. Si era un borrador que llegó del ERP, el conector ya no lo vuelve a
+crear.
 
 **Verificación pública por QR**: cualquiera que escanee el QR puede ver y
 descargar el PDF **sin iniciar sesión** mientras el acceso siga vigente
@@ -285,6 +306,10 @@ Mantén la agenda al día: como manda sobre lo leído, un dato mal guardado en
 una ficha se propagaría a los DeCA siguientes. Corrígelo en la ficha.
 
 ## 10. Configuración (solo administrador)
+
+La pantalla está en pestañas: **General**, **Avisos y email**, **Lectura de
+documentos**, **Sin cobertura**, **Informes y archivo** y **Conexión con tu
+ERP**. La pestaña va en la dirección (`?seccion=erp`), así se puede enlazar.
 
 - **Papel de tu empresa**: Cargador o Transportista. Como transportista, tu
   NIF (`EMPRESA_NIF` de la instalación) se precarga en el campo del
@@ -326,6 +351,10 @@ una ficha se propagaría a los DeCA siguientes. Corrígelo en la ficha.
   `{matricula_tractor}` y `{empresa}`.
 - **Modelos de documento** y **Precisión de lectura**: ver la
   [sección 7](#7-la-lectura-automática-y-cuándo-desconfiar-de-ella).
+- **Conexión con tu ERP**: claves de integración para que el ERP de la
+  empresa envíe los albaranes y se genere el DeCA solo. La clave se enseña
+  una sola vez; revocarla corta el acceso al momento. Guía técnica:
+  [`INTEGRACION_ERP.md`](INTEGRACION_ERP.md).
 
 Los cambios llegan a cada móvil la próxima vez que abra la aplicación con
 red. Un móvil que ya está en el campo sin cobertura sigue con lo que tenía

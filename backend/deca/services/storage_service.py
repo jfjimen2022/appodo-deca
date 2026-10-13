@@ -34,18 +34,21 @@ def dias_visibilidad_publica_de() -> int:
     return DIAS_VISIBILIDAD_PUBLICA_DEFECTO
 
 
-def guardar_pdf_generado(expedicion: ExpedicionDeca, contenido_pdf: bytes) -> ExpedicionDeca:
+def guardar_pdf_generado(expedicion: ExpedicionDeca, contenido_pdf: bytes, generado_en=None) -> ExpedicionDeca:
     """Guarda el PDF final de `expedicion`, calcula su hash SHA-256 y fija
     la fecha en la que el acceso público sin login deja de estar permitido.
 
     Args:
         expedicion: expedición ya confirmada para la que se generó el DeCA.
         contenido_pdf: bytes del PDF nativo con el QR ya estampado.
+        generado_en: el instante que se usó como fecha de creación del PDF;
+            debe ser el mismo que se guarda, o al corregir el DeCA la creación
+            del PDF nuevo no coincidiría con la del original.
 
     Returns:
         La misma expedición, actualizada y guardada en BD.
     """
-    ahora = timezone.now()
+    ahora = generado_en or timezone.now()
     dias = dias_visibilidad_publica_de()
 
     expedicion.pdf_generado.save(

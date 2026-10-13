@@ -68,7 +68,10 @@ function Ejemplar({ item, empresaNombre, destinatarioCopia, t }) {
           <Fila etiqueta={t('offline.imp.tractora')} valor={d.matricula_tractor} />
           <Fila etiqueta={t('offline.imp.remolque')} valor={remolque} />
           <Fila etiqueta={t('offline.imp.mercancia')} valor={d.naturaleza_mercancia} />
-          <Fila etiqueta={t('offline.imp.peso')} valor={d.peso_kg != null && d.peso_kg !== '' ? `${d.peso_kg} kg` : ''} />
+          <Fila
+            etiqueta={t('offline.imp.peso')}
+            valor={`${d.peso_kg != null && d.peso_kg !== '' ? `${d.peso_kg} kg` : '—'} · ${t('offline.imp.peso_bruto')}: ${d.peso_bruto_kg != null && d.peso_bruto_kg !== '' ? `${d.peso_bruto_kg} kg` : '—'}`}
+          />
           <Fila etiqueta={t('offline.imp.bultos')} valor={d.bultos} />
           <Fila etiqueta={t('offline.imp.autorizacion')} valor={d.autorizacion_especial} />
           <Fila etiqueta={t('offline.imp.conductor')} valor={[d.nombre_conductor, d.nif_conductor].filter(Boolean).join(' · ')} />

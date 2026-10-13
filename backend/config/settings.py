@@ -140,6 +140,8 @@ REST_FRAMEWORK = {
         # Scope propio (nunca el genérico 'anon') para el endpoint público
         # de descarga por QR -- ver deca/views.py::DecaLecturaPublicaThrottle.
         'deca_publico': '30/min',
+        # Ingesta desde el ERP (views_integracion.py), por clave.
+        'deca_integracion': '1200/hour',
     },
 }
 

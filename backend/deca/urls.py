@@ -7,7 +7,7 @@ usuarios."""
 
 from django.urls import path
 
-from . import views, views_usuarios
+from . import views, views_integracion, views_usuarios
 
 urlpatterns = [
     path('deca/configuracion/', views.ConfiguracionDecaView.as_view(), name='deca-configuracion'),
@@ -120,6 +120,11 @@ urlpatterns = [
         name='deca-expedicion-registrar-papel',
     ),
     path(
+        'deca/expediciones/<uuid:expedicion_id>/descartar-cambios-erp/',
+        views.DescartarCambiosErpDecaView.as_view(),
+        name='deca-expedicion-descartar-cambios-erp',
+    ),
+    path(
         'deca/expediciones/<uuid:expedicion_id>/enviar-email/',
         views.EnviarEmailExpedicionDecaView.as_view(),
         name='deca-expedicion-enviar-email',
@@ -156,4 +161,22 @@ urlpatterns = [
     # is_staff True/False.
     path('deca/usuarios/', views_usuarios.UsuarioListCreateView.as_view(), name='deca-usuarios'),
     path('deca/usuarios/<int:pk>/', views_usuarios.UsuarioDetailView.as_view(), name='deca-usuario-detalle'),
+    # Integración con el ERP de la empresa (views_integracion.py): el
+    # programa externo envía con X-Api-Key; las claves se gestionan en
+    # Configuración.
+    path(
+        'deca/integracion/expediciones/',
+        views_integracion.IngestaExpedicionDecaView.as_view(),
+        name='deca-integracion-expediciones',
+    ),
+    path(
+        'deca/integracion/claves/',
+        views_integracion.ClaveIntegracionDecaListCreateView.as_view(),
+        name='deca-integracion-claves',
+    ),
+    path(
+        'deca/integracion/claves/<uuid:pk>/revocar/',
+        views_integracion.RevocarClaveIntegracionDecaView.as_view(),
+        name='deca-integracion-clave-revocar',
+    ),
 ]

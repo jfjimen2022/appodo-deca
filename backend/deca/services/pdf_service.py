@@ -79,8 +79,25 @@ def _dibujar_qr_esquina(qr_png: bytes, marca_agua: bool = False):
     return _on_first_page
 
 
-def _fila(etiqueta: str, valor: str) -> list[str]:
-    return [etiqueta, valor or '—']
+# El texto suelto en una celda de Table NO salta de línea en reportlab: un
+# comentario largo se cortaba por la derecha y el domicilio del cargador se
+# metía en la columna del transportista (fix de Appodo v4.38.2). Todo valor
+# va en un Paragraph, que sí ajusta
+# el texto al ancho de su celda.
+ESTILO_VALOR = ParagraphStyle('ValorDeca', fontName='Helvetica', fontSize=9, leading=11.5)
+# Información adicional: textos largos (reservas, instrucciones), letra menor.
+ESTILO_VALOR_PEQUENO = ParagraphStyle('ValorDecaPequeno', fontName='Helvetica', fontSize=8, leading=10)
+ESTILO_PARTE = ParagraphStyle('ParteDeca', fontName='Helvetica', fontSize=9, leading=11.5)
+
+
+def _texto(valor) -> str:
+    """Texto de usuario seguro para un Paragraph (escapa <, >, &) y con sus
+    saltos de línea."""
+    return escape(str(valor)).replace('\n', '<br/>')
+
+
+def _fila(etiqueta: str, valor: str, estilo: ParagraphStyle = ESTILO_VALOR) -> list:
+    return [etiqueta, Paragraph(_texto(valor) if valor else '—', estilo)]
 
 
 def _tabla_transporte_style() -> TableStyle:
@@ -90,6 +107,7 @@ def _tabla_transporte_style() -> TableStyle:
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#D1D5DB')),
         ('ROWBACKGROUNDS', (0, 0), (-1, -1), [colors.white, colors.HexColor('#FAFAFA')]),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('TOPPADDING', (0, 0), (-1, -1), 5),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
         ('LEFTPADDING', (0, 0), (-1, -1), 6),
@@ -187,14 +205,21 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
     elementos.append(Spacer(1, 5 * mm))
 
     ancho_partes = ANCHO_UTIL_MM / 3
+    def _parte(nombre, nif, domicilio=''):
+        # Nombre en negrita, NIF debajo y el domicilio (art. 6.a, solo el
+        # cargador) en letra algo menor y gris: dentro de su columna.
+        texto = f'<b>{_texto(nombre or "—")}</b><br/>NIF/CIF: {_texto(nif or "—")}'
+        if domicilio:
+            texto += f'<br/><font size="8" color="#4B5563">{_texto(domicilio)}</font>'
+        return Paragraph(texto, ESTILO_PARTE)
+
     datos = [
         ['Cargador', 'Transportista efectivo', 'Destinatario'],
         [
             # Domicilio del cargador: art. 6.a de la Orden FOM/2861/2012.
-            f'{expedicion.nombre_cargador}\nNIF/CIF: {expedicion.nif_cargador}'
-            + (f'\n{expedicion.domicilio_cargador}' if expedicion.domicilio_cargador else ''),
-            f'{expedicion.nombre_transportista}\nNIF/CIF: {expedicion.nif_transportista}',
-            f'{expedicion.nombre_destinatario}\nNIF/CIF: {expedicion.nif_destinatario}',
+            _parte(expedicion.nombre_cargador, expedicion.nif_cargador, expedicion.domicilio_cargador),
+            _parte(expedicion.nombre_transportista, expedicion.nif_transportista),
+            _parte(expedicion.nombre_destinatario, expedicion.nif_destinatario),
         ],
     ]
     tabla_partes = Table(datos, colWidths=[ancho_partes * mm] * 3)
@@ -216,6 +241,16 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
     # DeCA anticipado: el peso es el previsto hasta que se corrige con el real.
     if expedicion.peso_estimado and expedicion.peso_kg is not None:
         peso_texto += ' (estimado)'
+    peso_bruto_texto = f'{expedicion.peso_bruto_kg} kg' if expedicion.peso_bruto_kg is not None else '—'
+    # Neto y bruto en la misma línea (2026-10-06): el bruto a la derecha.
+    fila_peso = [
+        'Peso neto',
+        Paragraph(
+            f'{_texto(peso_texto)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'
+            f'<font color="#6B7280"><b>Peso bruto</b></font>&nbsp;&nbsp;{_texto(peso_bruto_texto)}',
+            ESTILO_VALOR,
+        ),
+    ]
     bultos_texto = str(expedicion.bultos) if expedicion.bultos is not None else '—'
     # `fecha_hora_transporte` es null=True desde que el borrador puede nacer
     # vacío (ver ExpedicionDeca en models.py) -- la vista previa debe poder
@@ -234,7 +269,7 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
         _fila('Destino', expedicion.destino),
         _fila('Fecha y hora del transporte', fecha_texto),
         _fila('Naturaleza de la mercancía', expedicion.naturaleza_mercancia),
-        _fila('Peso', peso_texto),
+        fila_peso,
         _fila('Bultos', bultos_texto),
     ]
     # Plus sobre el mínimo legal -- solo se añaden a la tabla si tienen dato,
@@ -273,7 +308,9 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
         ('Instrucciones de pago del transporte', expedicion.instrucciones_pago),
         ('Reservas y comentarios', expedicion.comentarios),
     ]
-    filas_adicionales = [_fila(etiqueta, valor) for etiqueta, valor in campos_adicionales if valor]
+    filas_adicionales = [
+        _fila(etiqueta, valor, ESTILO_VALOR_PEQUENO) for etiqueta, valor in campos_adicionales if valor
+    ]
     if filas_adicionales:
         tabla_adicionales = Table(filas_adicionales, colWidths=[ANCHO_UTIL_MM * 0.35 * mm, ANCHO_UTIL_MM * 0.65 * mm])
         tabla_adicionales.setStyle(_tabla_transporte_style())
@@ -301,7 +338,9 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
     if sucesivos:
         filas_sucesivos = [['#', 'Nombre', 'NIF/CIF', 'Matrícula']]
         for t in sucesivos:
-            filas_sucesivos.append([str(t.orden), t.nombre, t.nif, t.matricula or '—'])
+            filas_sucesivos.append([
+                str(t.orden), Paragraph(_texto(t.nombre), ESTILO_VALOR), t.nif, t.matricula or '—',
+            ])
         ancho_sucesivos = [ANCHO_UTIL_MM * f for f in (0.08, 0.42, 0.30, 0.20)]
         tabla_sucesivos = Table(filas_sucesivos, colWidths=[a * mm for a in ancho_sucesivos])
         tabla_sucesivos.setStyle(TableStyle([
@@ -402,7 +441,7 @@ ETIQUETAS_CAMPO = {
     'matricula_tractor': 'Matrícula vehículo / tractora', 'matricula_remolque': 'Matrícula remolque',
     'sin_remolque': 'Sin remolque', 'autorizacion_especial': 'Autorización especial',
     'origen': 'Origen', 'destino': 'Destino', 'fecha_hora_transporte': 'Fecha y hora del transporte',
-    'naturaleza_mercancia': 'Naturaleza de la mercancía', 'peso_kg': 'Peso (kg)', 'peso_estimado': 'Peso estimado',
+    'naturaleza_mercancia': 'Naturaleza de la mercancía', 'peso_kg': 'Peso neto (kg)', 'peso_bruto_kg': 'Peso bruto (kg)', 'peso_estimado': 'Peso estimado',
     'bultos': 'Bultos', 'volumen_m3': 'Volumen (m³)', 'codigo_mercancia': 'Código de la mercancía',
     'numero_pedido': 'Nº de pedido', 'comentarios': 'Observaciones',
     'nombre_conductor': 'Conductor', 'nif_conductor': 'NIF del conductor',

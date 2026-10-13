@@ -6,6 +6,66 @@ SemVer del ERP Appodo — cada entrada que proviene de un resync de código
 anota además la versión y fecha de Appodo de origen (ver
 `docs/PLAN_EXTRACCION.md`, sección "Nombre y versión").
 
+## [v03] — 2026-10-13
+
+Resync del módulo DeCA del ERP Appodo: lo funcional de las versiones 4.38 a
+4.49.3, adaptado a single-tenant. Lo específico de clientes concretos (su
+conector, sus datos y su configuración) no forma parte de este repositorio.
+
+_Sincronizado desde Appodo ERP v4.49.3 (2026-10-13)._
+
+### Añadido
+
+- **Conexión con el ERP de la empresa** (`backend/deca/views_integracion.py`):
+  `POST/GET /api/v1/deca/integracion/expediciones/` con clave en `X-Api-Key`.
+  El ERP (o un conector en su red) envía cada albarán y se genera el DeCA
+  solo; si falta algún obligatorio queda en borrador. Idempotente por
+  `referencia_externa`. Claves de integración (solo se guarda su SHA-256) que
+  el administrador crea y revoca en **Configuración → Conexión con tu ERP**.
+  Límite de 1.200 envíos/hora por clave. Guía: `docs/INTEGRACION_ERP.md`.
+- **Peso neto y bruto** en la misma línea del DeCA (`peso_bruto_kg`); basta
+  con uno de los dos para generar.
+- **NIF desde la Agenda** cuando el ERP manda el nombre sin NIF: coincidencia
+  exacta → se completa; aproximada → se completa pero queda en borrador con
+  aviso.
+- **«Modificado en el ERP»**: si el ERP reenvía con datos distintos un DeCA
+  ya emitido, no se toca; se guarda qué cambió, se marca en rojo y se puede
+  corregir, anular o descartar el aviso.
+- **Lo del ERP no duplica lo hecho a mano**: se enlaza por nº de albarán
+  (sin espacios) y se borra el borrador sobrante; un borrador del ERP que se
+  borra no vuelve a aparecer (`ReferenciaErpDescartada`).
+- **Filtros de Expediciones** para lo que llega del ERP (origen, modificados,
+  les falta algún dato), búsqueda por referencia del ERP, columna «Ref. ERP»
+  en las exportaciones, y refresco automático del listado.
+- **Adjuntar documentos con el DeCA ya generado** (el CMR firmado que vuelve
+  con el camión): no se lee, no cambia el PDF ni el QR y no se puede quitar.
+- Configuración reorganizada en **pestañas** (`?seccion=` en la URL).
+
+### Corregido
+
+- Generar y corregir un DeCA es **todo o nada**: si falla el PDF o el
+  almacenamiento no queda nada a medias ni se consume número del contador.
+- Número de DeCA automático duplicado con dos generaciones a la vez.
+- PDF: «Reservas y comentarios» ya no se corta y el domicilio del cargador no
+  invade la columna del transportista; la fecha de creación del PDF no cambia
+  al corregir; en un CMR el transportista sale de la casilla 16.
+- Hora de los envíos del ERP: se toma como hora local, no UTC.
+- Informes: un nombre o filtro con `<` o `&` ya no rompe los PDF
+  (`texto_pdf`), y en los Excel un valor que empiece por `=` se guarda como
+  texto, nunca como fórmula (`core_utils/excel_utils.py`).
+- Subir un documento con un tipo inventado devuelve un error claro.
+
+### Técnico
+
+- Migración `0004_sync_appodo_v4_49` (claves de integración, referencias
+  descartadas, campos de integración y peso bruto en la expedición).
+- Nueva dependencia de frontend `@radix-ui/react-tabs`. Tras actualizar:
+  `docker compose up -d --build` (aplica la migración al arrancar).
+- Tests: `test_integracion.py`, `test_generacion_atomica.py`,
+  `test_listado.py`, `test_robustez_informes.py` portados; vitest de
+  `ClavesIntegracionDeca` y `useAutoRefresh`.
+- Manual de usuario actualizado y guía nueva `docs/INTEGRACION_ERP.md`.
+
 ## [v02] — 2026-10-02
 
 Resync completo del módulo DeCA del ERP Appodo: todo lo funcional de las

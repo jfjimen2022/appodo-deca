@@ -16,6 +16,7 @@ from .services.storage_service import puede_editar_generado as _puede_editar_gen
 from .models import (
     AliasAgendaDeca,
     CargadorDeca,
+    ClaveIntegracionDeca,
     ConductorDeca,
     ConfiguracionDeca,
     DestinatarioDeca,
@@ -304,20 +305,32 @@ class ExpedicionDecaSerializer(serializers.ModelSerializer):
             'matricula_tractor', 'matricula_remolque', 'sin_remolque', 'autorizacion_especial',
             'referencia_offline', 'emitido_sin_conexion_en',
             'origen', 'destino', 'fecha_hora_transporte',
-            'naturaleza_mercancia', 'peso_kg', 'peso_estimado', 'bultos', 'volumen_m3', 'codigo_mercancia',
+            'naturaleza_mercancia', 'peso_kg', 'peso_bruto_kg', 'peso_estimado', 'bultos', 'volumen_m3',
+            'codigo_mercancia',
             'numero_pedido', 'instrucciones_conductor', 'contacto_emergencias', 'tipo_contenedor',
             'instrucciones_expedidor', 'instrucciones_pago', 'comentarios',
             'nombre_conductor', 'nif_conductor', 'telefono_conductor', 'email_conductor',
             'token_publico', 'hash_sha256', 'fecha_generacion', 'fecha_expiracion_publica',
             'creado_por', 'documentos_origen', 'transportistas_sucesivos', 'acceso_publico_vigente',
             'tiene_pdf_generado', 'puede_editar', 'fecha_limite_edicion',
+            'referencia_externa', 'recibida_de', 'cambios_erp', 'cambios_erp_en',
         ]
         read_only_fields = [
             'id', 'estado', 'numero_interno', 'anio', 'mes', 'token_publico', 'hash_sha256',
             'fecha_generacion', 'fecha_expiracion_publica', 'creado_por',
             'documentos_origen', 'transportistas_sucesivos', 'acceso_publico_vigente',
             'tiene_pdf_generado', 'puede_editar', 'fecha_limite_edicion',
+            # Solo la pone la integración al recibir el envío: es la huella
+            # del albarán en el ERP de la empresa, no se edita a mano.
+            'referencia_externa', 'recibida_de', 'cambios_erp', 'cambios_erp_en',
         ]
+
+    recibida_de = serializers.SerializerMethodField()
+
+    def get_recibida_de(self, obj):
+        """Nombre de la clave de integración por la que llegó, o None si se
+        hizo en Appodo."""
+        return obj.clave_integracion.nombre if obj.clave_integracion_id else None
 
     def get_creado_por(self, obj):
         """Nombre legible de quien creó la expedición."""
@@ -435,6 +448,42 @@ class ExpedicionDecaSerializer(serializers.ModelSerializer):
         if instance.estado == ExpedicionDeca.Estado.CONFIRMADO:
             validated_data['estado'] = ExpedicionDeca.Estado.BORRADOR
         return super().update(instance, validated_data)
+
+
+class ClaveIntegracionDecaSerializer(serializers.ModelSerializer):
+    """Lista de claves de integración. Nunca lleva la clave: solo existe en
+    claro en la respuesta de crearla (ver ClaveIntegracionDecaListCreateView)."""
+    activa = serializers.BooleanField(read_only=True)
+    creada_por = serializers.SerializerMethodField()
+    revocada_por = serializers.SerializerMethodField()
+    expediciones_recibidas = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ClaveIntegracionDeca
+        fields = [
+            'id', 'nombre', 'prefijo', 'activa', 'fecha_alta', 'creada_por', 'ultimo_uso',
+            'revocada_en', 'revocada_por', 'expediciones_recibidas',
+        ]
+        read_only_fields = fields[2:]
+
+    def get_creada_por(self, obj):
+        return _nombre_usuario(obj.creada_por)
+
+    def get_revocada_por(self, obj):
+        return _nombre_usuario(obj.revocada_por)
+
+    def get_expediciones_recibidas(self, obj):
+        """Cuántas expediciones ha traído esta clave. El listado lo trae ya
+        calculado (`n_expediciones`, annotate en la vista); fuera del listado
+        (p. ej. al crear o revocar una sola clave) se cuenta aquí."""
+        n = getattr(obj, 'n_expediciones', None)
+        return n if n is not None else obj.expediciones.count()
+
+    def validate_nombre(self, valor):
+        valor = (valor or '').strip()
+        if not valor:
+            raise serializers.ValidationError('Ponle un nombre para reconocerla, p. ej. "ERP - oficina".')
+        return valor
 
 
 class ExpedicionDecaEnviarEmailSerializer(serializers.Serializer):

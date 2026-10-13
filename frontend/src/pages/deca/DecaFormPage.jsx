@@ -80,7 +80,7 @@ const FORM_VACIO = {
   matricula_tractor: '', matricula_remolque: '', sin_remolque: false, autorizacion_especial: '',
   origen: '', destino: '',
   fecha_hora_transporte: '',
-  naturaleza_mercancia: '', peso_kg: '', peso_estimado: false, bultos: '', volumen_m3: '', codigo_mercancia: '',
+  naturaleza_mercancia: '', peso_kg: '', peso_bruto_kg: '', peso_estimado: false, bultos: '', volumen_m3: '', codigo_mercancia: '',
   nombre_conductor: '', nif_conductor: '', telefono_conductor: '', email_conductor: '',
   numero_pedido: '', instrucciones_conductor: '', contacto_emergencias: '', tipo_contenedor: '',
   instrucciones_expedidor: '', instrucciones_pago: '', comentarios: '',
@@ -125,7 +125,7 @@ function expedicionAForm(exp) {
     origen: exp.origen ?? '', destino: exp.destino ?? '',
     fecha_hora_transporte: isoADatetimeLocal(exp.fecha_hora_transporte),
     naturaleza_mercancia: exp.naturaleza_mercancia ?? '',
-    peso_kg: exp.peso_kg ?? '', peso_estimado: Boolean(exp.peso_estimado), bultos: exp.bultos ?? '',
+    peso_kg: exp.peso_kg ?? '', peso_bruto_kg: exp.peso_bruto_kg ?? '', peso_estimado: Boolean(exp.peso_estimado), bultos: exp.bultos ?? '',
     volumen_m3: exp.volumen_m3 ?? '', codigo_mercancia: exp.codigo_mercancia ?? '',
     nombre_conductor: exp.nombre_conductor ?? '', nif_conductor: exp.nif_conductor ?? '',
     telefono_conductor: exp.telefono_conductor ?? '', email_conductor: exp.email_conductor ?? '',
@@ -542,6 +542,7 @@ export default function DecaFormPage() {
     fecha_hora_transporte: form.fecha_hora_transporte || null,
     naturaleza_mercancia: form.naturaleza_mercancia.trim(),
     peso_kg: form.peso_kg === '' ? null : form.peso_kg,
+    peso_bruto_kg: form.peso_bruto_kg === '' ? null : form.peso_bruto_kg,
     // Solo se manda si la empresa trabaja con DeCA anticipado (el servidor lo rechaza si no).
     ...(opcionesCampo.anticipado || form.peso_estimado ? { peso_estimado: Boolean(form.peso_estimado) } : {}),
     bultos: form.bultos === '' ? null : parseInt(form.bultos, 10),
@@ -839,6 +840,7 @@ export default function DecaFormPage() {
     if (nuevas.nombre_conductor) acc.nombre_conductor = nuevas.nombre_conductor
     if (nuevas.nif_conductor) acc.nif_conductor = nuevas.nif_conductor
     if (nuevas.peso_kg != null) acc.peso_kg = nuevas.peso_kg
+    if (nuevas.peso_bruto_kg != null) acc.peso_bruto_kg = nuevas.peso_bruto_kg
     if (nuevas.bultos != null) acc.bultos = nuevas.bultos
     if (nuevas.fecha_hora_transporte) acc.fecha_hora_transporte = nuevas.fecha_hora_transporte
     return acc
@@ -871,6 +873,7 @@ export default function DecaFormPage() {
         if (!siguiente[campo]) siguiente[campo] = valor
       }
       if (!siguiente.peso_kg && nuevas.peso_kg != null) siguiente.peso_kg = String(nuevas.peso_kg)
+      if (!siguiente.peso_bruto_kg && nuevas.peso_bruto_kg != null) siguiente.peso_bruto_kg = String(nuevas.peso_bruto_kg)
       if (!siguiente.bultos && nuevas.bultos != null) siguiente.bultos = String(nuevas.bultos)
       if (!siguiente.fecha_hora_transporte && nuevas.fecha_hora_transporte) {
         const convertida = isoADatetimeLocal(nuevas.fecha_hora_transporte)
@@ -996,7 +999,7 @@ export default function DecaFormPage() {
     }
 
     setSubiendoDoc(true)
-    const acumuladas = { nifs_encontrados: [], matriculas_encontradas: [], peso_kg: null, bultos: null, fecha_hora_transporte: null, nombre_conductor: null, nif_conductor: null }
+    const acumuladas = { nifs_encontrados: [], matriculas_encontradas: [], peso_kg: null, peso_bruto_kg: null, bultos: null, fecha_hora_transporte: null, nombre_conductor: null, nif_conductor: null }
     let nifsAgendaAcum = {}
     const avisosAgendaAcum = []
     const camposAgendaAcum = []
@@ -1076,7 +1079,7 @@ export default function DecaFormPage() {
     }
 
     const huboRegex = acumuladas.nifs_encontrados.length || acumuladas.matriculas_encontradas.length
-      || acumuladas.peso_kg || acumuladas.bultos || acumuladas.fecha_hora_transporte
+      || acumuladas.peso_kg || acumuladas.peso_bruto_kg || acumuladas.bultos || acumuladas.fecha_hora_transporte
       || acumuladas.nombre_conductor || acumuladas.nif_conductor
     if (huboRegex) {
       setSugerencias(acumuladas)
@@ -1094,6 +1097,7 @@ export default function DecaFormPage() {
         toast.info(t('expedicion.ia_completo_campos', 'La IA ha completado algunos campos que el regex no encontró -- revísalos.'))
       }
     }
+    if (huboRegex || camposAplicadosIA.length > 0) setGuardarTrasLectura((n) => n + 1)
     // Ni el regex ni la IA encontraron nada -- documento no legible (foto
     // borrosa, escaneo de mala calidad, formato muy distinto al habitual).
     // Antes esto pasaba en silencio: el documento se subía bien (toast
@@ -1149,14 +1153,32 @@ export default function DecaFormPage() {
   }
 
   // Reintenta la extracción sobre un documento YA subido, sin volver a
-  // subirlo.
+  // subirlo -- pedido explícito 2026-09-23: "falta botón extracción de
+  // datos por si falla algo al subir pdf" (antes solo se intentaba una
+  // vez, en el momento de la subida).
+  // Lo que rellena la lectura (regex + IA) se guarda en el borrador en cuanto
+  // termina, sin esperar a que la persona pulse Guardar (pedido del usuario
+  // 2026-10-06): un "atrás" del navegador (Alt+←, botón del ratón) justo al
+  // acabar la lectura dejaba el documento subido pero los datos leídos sin
+  // guardar, y había que volver a extraer. Se dispara con un contador para que
+  // el PATCH salga DESPUÉS del render, con el formulario ya rellenado. Solo
+  // escritorio: el alta móvil ya autoguarda sola (guardarBorradorMovil).
+  const [guardarTrasLectura, setGuardarTrasLectura] = useState(0)
+  useEffect(() => {
+    if (!guardarTrasLectura || altaMovil || !expedicion?.id || expedicion.estado !== 'borrador') return
+    // Sin aviso si falla (p. ej. un NIF leído con la letra mal): los datos
+    // siguen en pantalla y el aviso de error sale al guardar a mano.
+    decaService.actualizarExpedicion(expedicion.id, construirPayload()).catch(() => {})
+  }, [guardarTrasLectura]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleExtraerDocumento = async (doc) => {
     setExtrayendoDocId(doc.id)
     try {
       const { data } = await decaService.extraerDocumento(doc.id)
       const huboRegex = data.campos_sugeridos && (
         data.campos_sugeridos.nifs_encontrados?.length || data.campos_sugeridos.matriculas_encontradas?.length
-        || data.campos_sugeridos.peso_kg != null || data.campos_sugeridos.bultos != null
+        || data.campos_sugeridos.peso_kg != null || data.campos_sugeridos.peso_bruto_kg != null
+        || data.campos_sugeridos.bultos != null
         || data.campos_sugeridos.fecha_hora_transporte
         || data.campos_sugeridos.nombre_conductor || data.campos_sugeridos.nif_conductor
       )
@@ -1173,6 +1195,7 @@ export default function DecaFormPage() {
       if (data.campos_dudosos?.length > 0) setCamposDudosos(data.campos_dudosos)
       anotarZonas(doc.id, data.zonas)
       if (data.plantilla_aplicada) setPlantillaAplicada(data.plantilla_aplicada)
+      if (huboRegex || data.campos_sugeridos_ia) setGuardarTrasLectura((n) => n + 1)
       if (data.ia_error) {
         avisarIANoDisponible(data.ia_error)
       } else if (!huboRegex && !data.campos_sugeridos_ia) {
@@ -1559,7 +1582,7 @@ export default function DecaFormPage() {
     nif_destinatario: 'destinatario', nombre_destinatario: 'destinatario',
     matricula_tractor: 'transporte', matricula_remolque: 'transporte', origen: 'transporte',
     destino: 'transporte', fecha_hora_transporte: 'transporte',
-    naturaleza_mercancia: 'mercancia', peso_kg: 'mercancia', bultos: 'mercancia',
+    naturaleza_mercancia: 'mercancia', peso_kg: 'mercancia', peso_bruto_kg: 'mercancia', bultos: 'mercancia',
     nombre_conductor: 'conductor', nif_conductor: 'conductor',
   }
   const primerCampoConError = Object.keys(SECCION_DE_CAMPO).find((c) => fieldErrors[c])
@@ -1900,6 +1923,9 @@ export default function DecaFormPage() {
                   {sugerencias.peso_kg != null && (
                     <span className="text-sm bg-white border border-gray-200 rounded px-2 py-1">{t('expedicion.label_peso')}: <strong>{sugerencias.peso_kg}</strong></span>
                   )}
+                  {sugerencias.peso_bruto_kg != null && (
+                    <span className="text-sm bg-white border border-gray-200 rounded px-2 py-1">{t('expedicion.label_peso_bruto')}: <strong>{sugerencias.peso_bruto_kg}</strong></span>
+                  )}
                   {sugerencias.bultos != null && (
                     <span className="text-sm bg-white border border-gray-200 rounded px-2 py-1">{t('expedicion.label_bultos')}: <strong>{sugerencias.bultos}</strong></span>
                   )}
@@ -2193,7 +2219,7 @@ export default function DecaFormPage() {
             <p id="ayuda-naturaleza_mercancia" className="text-xs text-gray-600">{t('expedicion.ayuda_naturaleza')}</p>
             {errorCampo('naturaleza_mercancia')}
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="campo-peso_kg">{t('expedicion.label_peso')}{marcaObligatorio('peso_kg')}</Label>
               <div className="relative">
@@ -2209,6 +2235,16 @@ export default function DecaFormPage() {
                   {t('campo.peso_estimado')}
                 </label>
               )}
+            </div>
+            {/* Peso bruto junto al neto (2026-10-06): opcional; si solo se sabe
+                el bruto, también vale para generar el DeCA. */}
+            <div className="space-y-1.5">
+              <Label htmlFor="campo-peso_bruto_kg">{t('expedicion.label_peso_bruto')}</Label>
+              <div className="relative">
+                <Package className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-300" />
+                <Input id="campo-peso_bruto_kg" aria-describedby={fieldErrors.peso_bruto_kg ? 'error-peso_bruto_kg' : undefined} className={claseCampo('peso_bruto_kg', 'pl-9')} type="number" step="0.01" min="0" value={form.peso_bruto_kg} onChange={(e) => set('peso_bruto_kg')(e.target.value)} placeholder={t('expedicion.placeholder_peso')} disabled={readOnly} />
+              </div>
+              {errorCampo('peso_bruto_kg')}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="campo-bultos">{t('expedicion.label_bultos')}{marcaObligatorio('bultos')}</Label>

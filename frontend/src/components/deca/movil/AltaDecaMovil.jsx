@@ -35,7 +35,7 @@ const BLOQUES = [
   // Tractora y remolque juntos (art. 6.g: en un conjunto articulado se
   // piden las dos matrículas); peso y bultos con la mercancía.
   { id: 'transporte', icono: Route, campos: ['matricula_tractor', 'matricula_remolque', 'origen', 'destino', 'fecha_hora_transporte'] },
-  { id: 'mercancia', icono: Package, campos: ['naturaleza_mercancia', 'peso_kg', 'bultos'] },
+  { id: 'mercancia', icono: Package, campos: ['naturaleza_mercancia', 'peso_kg', 'peso_bruto_kg', 'bultos'] },
 ]
 
 // Cómo se pinta y se escribe cada campo. `agenda` = qué catálogo sugiere
@@ -62,6 +62,7 @@ const CAMPOS = {
   naturaleza_mercancia: { ayuda: true },
   numero_pedido: { mono: true },
   peso_kg: { mono: true, inputMode: 'decimal' },
+  peso_bruto_kg: { mono: true, inputMode: 'decimal' },
   bultos: { mono: true, inputMode: 'numeric' },
   volumen_m3: { mono: true, inputMode: 'decimal' },
   codigo_mercancia: { mono: true },

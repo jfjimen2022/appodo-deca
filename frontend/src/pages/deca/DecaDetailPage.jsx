@@ -3,14 +3,14 @@
 // plazo (con motivo obligatorio, Resolución de 5-jun-2026), anulación con
 // motivo e historial de auditoría exportable. Un borrador o una expedición
 // confirmada no tienen ficha: se abre directamente el formulario.
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import QRCode from 'react-qr-code'
 import {
   ArrowLeft, Loader2, Truck, Package, User, Building2, MapPin, CheckCircle2,
   Copy, Download, Ban, FileText, History, ShieldCheck, ShieldAlert, Mail,
-  Pencil, ChevronDown, ChevronUp, FileSpreadsheet, MoreHorizontal, AlertTriangle,
+  Pencil, ChevronDown, ChevronUp, FileSpreadsheet, MoreHorizontal, AlertTriangle, Paperclip,
 } from 'lucide-react'
 import { decaService } from '../../services/decaService'
 import EnviarEmailDecaDialog from '../../components/deca/EnviarEmailDecaDialog'
@@ -74,6 +74,34 @@ export default function DecaDetailPage() {
   const [modalEmailAbierto, setModalEmailAbierto] = useState(false)
   const [historialAbierto, setHistorialAbierto] = useState(false)
   const [exportandoAuditoria, setExportandoAuditoria] = useState(false)
+  const [adjuntando, setAdjuntando] = useState(false)
+  const inputAdjuntoRef = useRef(null)
+
+  // Con el DeCA ya emitido se puede seguir adjuntando (p. ej. el CMR firmado
+  // que vuelve con el camión). No se lee ni cambia el PDF, y no se puede
+  // quitar después: queda en el historial.
+  const handleAdjuntar = async (e) => {
+    const ficheros = Array.from(e.target.files || [])
+    e.target.value = ''
+    if (!ficheros.length) return
+    setAdjuntando(true)
+    try {
+      const subidos = []
+      for (const fichero of ficheros) {
+        const { data } = await decaService.subirDocumento(id, fichero, 'otro')
+        subidos.push(data.documento)
+      }
+      setExpedicion((prev) => ({ ...prev, documentos_origen: [...(prev.documentos_origen || []), ...subidos] }))
+      toast.success(t('detalle.adjunto_ok', { count: subidos.length, defaultValue: 'Documento adjuntado.' }))
+      const { data: eventosData } = await decaService.listarEventos(id)
+      setEventos(Array.isArray(eventosData) ? eventosData : (eventosData?.results ?? []))
+    } catch (err) {
+      const motivo = err.response?.data?.archivo || err.response?.data?.detail
+      toast.error(motivo ? String(motivo) : t('detalle.adjunto_error', 'No se pudo adjuntar el documento.'))
+    } finally {
+      setAdjuntando(false)
+    }
+  }
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -135,6 +163,20 @@ export default function DecaDetailPage() {
     }
   }
 
+  const [descartandoErp, setDescartandoErp] = useState(false)
+  const descartarCambiosErp = async () => {
+    setDescartandoErp(true)
+    try {
+      const { data } = await decaService.descartarCambiosErp(id)
+      setExpedicion(data)
+      toast.success(t('erp.descartado_ok'))
+    } catch {
+      toast.error(t('erp.error_descartar'))
+    } finally {
+      setDescartandoErp(false)
+    }
+  }
+
   const handleAnular = async () => {
     setAnulando(true)
     try {
@@ -190,7 +232,9 @@ export default function DecaDetailPage() {
           </Badge>
         </div>
         <p className="text-sm text-gray-500 mt-1">
-          {t('detalle.creado_por', { nombre: expedicion.creado_por || t('detalle.sin_creador') })}
+          {expedicion.recibida_de
+            ? t('detalle.recibida_de', { nombre: expedicion.recibida_de, referencia: expedicion.referencia_externa })
+            : t('detalle.creado_por', { nombre: expedicion.creado_por || t('detalle.sin_creador') })}
           {expedicion.fecha_generacion && ` · ${t('detalle.creado_el', { fecha: formatearFecha(expedicion.fecha_generacion) })}`}
         </p>
       </div>
@@ -205,6 +249,30 @@ export default function DecaDetailPage() {
         <div role="status" className="flex items-start gap-2 rounded-lg border-2 border-amber-500 bg-amber-50 p-3 text-sm font-semibold text-gray-900">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
           {t('campo.detalle_peso_estimado')}
+        </div>
+      )}
+      {expedicion.cambios_erp?.length > 0 && (
+        <div role="alert" className="rounded-lg border-2 border-red-400 bg-red-50 p-3 text-sm text-gray-900">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-700" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-red-900">{t('erp.aviso_titulo')}</p>
+              <p className="mt-0.5">{t('erp.aviso_explicacion')}</p>
+              <ul className="mt-2 space-y-1">
+                {expedicion.cambios_erp.map((c) => (
+                  <li key={c.campo} className="break-words">
+                    <span className="font-semibold">{t(`expedicion.label_campo_${c.campo}`, c.campo)}:</span>{' '}
+                    {t('erp.en_deca')} «{c.en_deca || '—'}» → {t('erp.en_erp')} «<b>{c.en_erp}</b>»
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={descartarCambiosErp} disabled={descartandoErp} className="gap-1.5 min-h-[40px]">
+                  {descartandoErp && <Loader2 className="h-4 w-4 animate-spin" />}{t('erp.descartar')}
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
       {expedicion.estado === 'papel' && (
@@ -287,6 +355,7 @@ export default function DecaDetailPage() {
             <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Campo label={t('detalle.label_naturaleza')} value={expedicion.naturaleza_mercancia} />
               <Campo label={t('detalle.label_peso')} value={expedicion.peso_kg ? `${expedicion.peso_kg} kg${expedicion.peso_estimado ? ` (${t('campo.estimado')})` : ''}` : null} />
+              <Campo label={t('detalle.label_peso_bruto')} value={expedicion.peso_bruto_kg ? `${expedicion.peso_bruto_kg} kg` : null} />
               <Campo label={t('detalle.label_bultos')} value={expedicion.bultos} />
               {expedicion.volumen_m3 != null && (
                 <Campo label={t('detalle.label_volumen')} value={`${expedicion.volumen_m3} m³`} />
@@ -400,9 +469,36 @@ export default function DecaDetailPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <FileText className="h-4 w-4 text-[var(--color-marca)]" /> {t('detalle.seccion_documentos')}
-              </CardTitle>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-[var(--color-marca)]" /> {t('detalle.seccion_documentos')}
+                </CardTitle>
+                {(expedicion.estado === 'generado' || expedicion.estado === 'papel') && (
+                  <>
+                    <input
+                      ref={inputAdjuntoRef}
+                      type="file"
+                      accept="application/pdf,image/*"
+                      multiple
+                      className="hidden"
+                      onChange={handleAdjuntar}
+                      aria-label={t('detalle.btn_adjuntar', 'Adjuntar documento')}
+                    />
+                    <Button
+                      variant="outline" size="sm" className="gap-1.5" disabled={adjuntando}
+                      onClick={() => inputAdjuntoRef.current?.click()}
+                    >
+                      {adjuntando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                      {t('detalle.btn_adjuntar', 'Adjuntar documento')}
+                    </Button>
+                  </>
+                )}
+              </div>
+              {(expedicion.estado === 'generado' || expedicion.estado === 'papel') && (
+                <CardDescription>
+                  {t('detalle.adjuntar_ayuda', 'Puedes seguir adjuntando documentos (por ejemplo, el CMR firmado). No cambian el DeCA ni su QR, y no se pueden quitar después.')}
+                </CardDescription>
+              )}
             </CardHeader>
             <CardContent>
               {expedicion.documentos_origen?.length ? (

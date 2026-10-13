@@ -1,13 +1,15 @@
-// Configuración de DeCA (solo administradores): papel de la empresa,
-// referencia de la expedición, acceso público y plazo de corrección,
-// notificaciones, "la agenda manda", trabajo en campo sin cobertura, cabecera
-// de documento controlado, plantilla del email, modelos de documento y
-// precisión de lectura. Una sola fila en el servidor (singleton).
+// Configuración de DeCA (solo administradores), en pestañas: General, Avisos
+// y email, Lectura de documentos, Sin cobertura, Informes y archivo, y
+// Conexión con tu ERP (claves de integración). Una sola fila en el servidor
+// (singleton).
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
-  ShieldCheck, Bell, Save, Loader2, Building2, FileSignature, Mail, Hash,
+  ShieldCheck, Bell, Save, Loader2, FileCheck2,
+  Building2, FileSignature, Mail, Hash, Settings2, ScanText, Truck, Plug,
 } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs'
 import { decaService } from '../../services/decaService'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
@@ -24,6 +26,7 @@ import PlantillasDocumentoDeca from '../../components/deca/PlantillasDocumentoDe
 import PrecisionLecturaDeca from '../../components/deca/PrecisionLecturaDeca'
 import TrabajoCampoDeca from '../../components/deca/TrabajoCampoDeca'
 import PrioridadAgendaDeca from '../../components/deca/PrioridadAgendaDeca'
+import ClavesIntegracionDeca from '../../components/deca/ClavesIntegracionDeca'
 
 // TODO(standalone): en el ERP origen esta pantalla incluía una tarjeta de
 // "Repositorio y custodia legal" que conectaba con Google Drive de la
@@ -67,6 +70,19 @@ const CONFIG_VACIA = {
 
 const DIAS_VISIBILIDAD_MINIMO = 7
 
+// Una pestaña por tema en vez de 12 tarjetas apiladas: encontrar un ajuste
+// costaba un buen scroll. La pestaña va en la URL (?seccion=erp) para poder
+// enlazarla desde la ayuda. `guarda`: usa el botón Guardar de la página;
+// las demás guardan por su cuenta.
+const SECCIONES = [
+  { id: 'general', icono: Settings2, etiqueta: 'General', guarda: true },
+  { id: 'avisos', icono: Bell, etiqueta: 'Avisos y email', guarda: true },
+  { id: 'lectura', icono: ScanText, etiqueta: 'Lectura de documentos', guarda: true },
+  { id: 'campo', icono: Truck, etiqueta: 'Sin cobertura', guarda: true },
+  { id: 'archivo', icono: FileCheck2, etiqueta: 'Informes y archivo', guarda: true },
+  { id: 'erp', icono: Plug, etiqueta: 'Conexión con tu ERP', guarda: false },
+]
+
 function SelectorCanal({ id, value, onChange, disabled, t }) {
   return (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
@@ -85,6 +101,10 @@ function SelectorCanal({ id, value, onChange, disabled, t }) {
 export default function ConfiguracionDecaPage() {
   const { t } = useTranslation('deca')
   const toast = useToast()
+
+  const [params, setParams] = useSearchParams()
+  const seccion = SECCIONES.find((s) => s.id === params.get('seccion')) || SECCIONES[0]
+  const cambiarSeccion = (id) => setParams({ seccion: id }, { replace: true })
 
   const [config, setConfig] = useState(CONFIG_VACIA)
   const [loading, setLoading] = useState(true)
@@ -136,14 +156,35 @@ export default function ConfiguracionDecaPage() {
 
   return (
     <div className="w-full max-w-3xl lg:max-w-6xl xl:max-w-7xl mx-auto space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t('configuracion.title')}</h1>
-        <p className="text-sm text-gray-500 mt-1">{t('configuracion.subtitle')}</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{t('configuracion.title')}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t('configuracion.subtitle')}</p>
+        </div>
+        {seccion.guarda && (
+          <Button onClick={handleSave} disabled={saving} className="gap-2">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? t('configuracion.btn_guardando') : t('configuracion.btn_guardar')}
+          </Button>
+        )}
       </div>
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-md p-3 text-sm">{error}</div>
       )}
+
+      <Tabs value={seccion.id} onValueChange={cambiarSeccion}>
+      {/* flex-wrap: en móvil las pestañas bajan de línea, nunca scroll lateral */}
+      <TabsList className="h-auto flex-wrap justify-start gap-1">
+        {SECCIONES.map(({ id, icono: Icono, etiqueta }) => (
+          <TabsTrigger key={id} value={id} className="gap-1.5">
+            <Icono className="h-4 w-4" aria-hidden="true" />
+            {t(`configuracion.seccion_${id}`, etiqueta)}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+
+      <TabsContent value="general" className="space-y-5 mt-4">
 
       {/* El DeCA lo tienen que formalizar los DOS lados (Orden FOM/2861/2012
           art. 4, responsabilidad solidaria en el art. 7), así que el módulo
@@ -238,7 +279,6 @@ export default function ConfiguracionDecaPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -295,7 +335,9 @@ export default function ConfiguracionDecaPage() {
             </div>
           </CardContent>
         </Card>
+      </TabsContent>
 
+      <TabsContent value="avisos" className="space-y-5 mt-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -358,12 +400,65 @@ export default function ConfiguracionDecaPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      <PrioridadAgendaDeca config={config} set={set} />
+      {/* Plantilla del email de envío manual: el texto que va con el PDF adjunto debe poder
+          adaptarse por empresa (firma, tono propio) en vez de venir fijo.
+          Vacío = se usa el mensaje estándar. El asunto por
+          defecto es el número de albarán/expedición (el "concepto"),
+          también editable con plantilla. Mismos placeholders documentados
+          para los dos campos. */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Mail className="h-4 w-4 text-[var(--color-marca)]" /> {t('configuracion.tarjeta_plantilla_email', 'Plantilla del email de envío')}
+          </CardTitle>
+          <CardDescription>
+            {t('configuracion.tarjeta_plantilla_email_desc', 'Opcional: personaliza el asunto y el mensaje con los que se envía el DeCA por email. Vacío = se usa el mensaje estándar de Appodo (asunto = referencia de la expedición, según lo elegido en General → "Referencia de la expedición").')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="plantilla_asunto_email" className="text-sm text-gray-700">
+              {t('configuracion.label_plantilla_asunto', 'Asunto (concepto) por defecto')}
+            </Label>
+            <Input
+              id="plantilla_asunto_email"
+              value={config.plantilla_asunto_email}
+              onChange={(e) => set('plantilla_asunto_email', e.target.value)}
+              placeholder={t('configuracion.plantilla_asunto_placeholder', '{identificador}')}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="plantilla_cuerpo_email" className="text-sm text-gray-700">
+              {t('configuracion.label_plantilla_cuerpo', 'Mensaje por defecto')}
+            </Label>
+            <Textarea
+              id="plantilla_cuerpo_email"
+              rows={6}
+              value={config.plantilla_cuerpo_email}
+              onChange={(e) => set('plantilla_cuerpo_email', e.target.value)}
+              placeholder={t('configuracion.plantilla_cuerpo_placeholder', 'Adjunto el DeCA de la expedición {identificador}...')}
+            />
+          </div>
+          <p className="text-xs text-gray-500">
+            {t('configuracion.plantilla_email_placeholders', 'Placeholders disponibles: {identificador} (según lo elegido en "Referencia de la expedición") {numero_albaran} {origen} {destino} {matricula_tractor} {empresa}.')}
+          </p>
+        </CardContent>
+      </Card>
+      </TabsContent>
 
-      <TrabajoCampoDeca config={config} set={set} />
+      <TabsContent value="lectura" className="space-y-5 mt-4">
+        <PrioridadAgendaDeca config={config} set={set} />
+        {/* Guardan por su cuenta (no dependen del botón Guardar). */}
+        <PlantillasDocumentoDeca />
+        <PrecisionLecturaDeca />
+      </TabsContent>
 
+      <TabsContent value="campo" className="space-y-5 mt-4">
+        <TrabajoCampoDeca config={config} set={set} />
+      </TabsContent>
+
+      <TabsContent value="archivo" className="space-y-5 mt-4">
       {/* Cabecera de documento controlado. Aplica al
           PDF de Expediciones y al de la Agenda (mismos 6 campos,
           ConfiguracionDeca.informe_*, compartidos entre ambos informes). */}
@@ -414,51 +509,6 @@ export default function ConfiguracionDecaPage() {
         </CardContent>
       </Card>
 
-      {/* Plantilla del email de envío manual: el texto que va con el PDF adjunto debe poder
-          adaptarse por empresa (firma, tono propio) en vez de venir fijo.
-          Vacío = se usa el mensaje estándar. El asunto por
-          defecto es el número de albarán/expedición (el "concepto"),
-          también editable con plantilla. Mismos placeholders documentados
-          para los dos campos. */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Mail className="h-4 w-4 text-[var(--color-marca)]" /> {t('configuracion.tarjeta_plantilla_email', 'Plantilla del email de envío')}
-          </CardTitle>
-          <CardDescription>
-            {t('configuracion.tarjeta_plantilla_email_desc', 'Opcional: personaliza el asunto y el mensaje con los que se envía el DeCA por email. Vacío = se usa el mensaje estándar (asunto = referencia de la expedición, según lo elegido arriba en "Referencia de la expedición").')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="plantilla_asunto_email" className="text-sm text-gray-700">
-              {t('configuracion.label_plantilla_asunto', 'Asunto (concepto) por defecto')}
-            </Label>
-            <Input
-              id="plantilla_asunto_email"
-              value={config.plantilla_asunto_email}
-              onChange={(e) => set('plantilla_asunto_email', e.target.value)}
-              placeholder={t('configuracion.plantilla_asunto_placeholder', '{identificador}')}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="plantilla_cuerpo_email" className="text-sm text-gray-700">
-              {t('configuracion.label_plantilla_cuerpo', 'Mensaje por defecto')}
-            </Label>
-            <Textarea
-              id="plantilla_cuerpo_email"
-              rows={6}
-              value={config.plantilla_cuerpo_email}
-              onChange={(e) => set('plantilla_cuerpo_email', e.target.value)}
-              placeholder={t('configuracion.plantilla_cuerpo_placeholder', 'Adjunto el DeCA de la expedición {identificador}...')}
-            />
-          </div>
-          <p className="text-xs text-gray-500">
-            {t('configuracion.plantilla_email_placeholders', 'Placeholders disponibles: {identificador} (según lo elegido en "Referencia de la expedición") {numero_albaran} {origen} {destino} {matricula_tractor} {empresa}.')}
-          </p>
-        </CardContent>
-      </Card>
-
       {/* TODO(standalone): tarjeta "Repositorio y custodia legal" (Google
           Drive) del ERP origen eliminada aquí -- ver comentario al inicio
           del archivo. Si se necesita custodia legal externa del DeCA
@@ -466,17 +516,12 @@ export default function ConfiguracionDecaPage() {
           propio) en vez de reintroducir el flujo OAuth de Drive, que
           dependía de credenciales de empresa que no existen en este
           backend standalone. */}
+      </TabsContent>
 
-      <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving} className="gap-2">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {saving ? t('configuracion.btn_guardando') : t('configuracion.btn_guardar')}
-        </Button>
-      </div>
-
-      {/* Guarda por su cuenta (no depende del botón de arriba). */}
-      <PlantillasDocumentoDeca />
-      <PrecisionLecturaDeca />
+      <TabsContent value="erp" className="space-y-5 mt-4">
+        <ClavesIntegracionDeca />
+      </TabsContent>
+      </Tabs>
     </div>
   )
 }

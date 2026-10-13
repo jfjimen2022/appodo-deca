@@ -240,6 +240,18 @@ def _numeros_es_de_linea(linea: str) -> list[float]:
     return numeros
 
 
+def _peso_bruto_total(texto: str) -> str | None:
+    """Peso BRUTO del envío: el primero de la pareja bruto-neto de la línea de
+    totales (mismo criterio que `_peso_total`). Si no hay esa pareja, None:
+    un peso suelto se toma como neto, nunca se adivina que sea el bruto."""
+    for linea in PATRON_LINEA_TOTAL.findall(texto):
+        numeros = _numeros_es_de_linea(linea)
+        for bruto, neto in zip(numeros, numeros[1:]):
+            if 0 < neto <= bruto and neto >= bruto * 0.5:
+                return f'{bruto:.2f}'
+    return None
+
+
 def _peso_total(texto: str) -> str | None:
     """Peso NETO total del envío, o None si no se puede saber con seguridad.
 
@@ -280,6 +292,7 @@ def extraer_campos(texto: str, texto_maquetado: str = '') -> dict[str, str | Non
         'nifs_encontrados': nifs_encontrados,
         'matriculas_encontradas': matriculas_encontradas,
         'peso_kg': _peso_total(texto_maquetado or texto),
+        'peso_bruto_kg': _peso_bruto_total(texto_maquetado or texto),
         'bultos': bultos_match.group(1) if bultos_match else None,
         'fecha_hora_transporte': _normalizar_fecha_es(fecha_match.group(0)) if fecha_match else None,
         'nombre_conductor': conductor_match.group(1).strip() if conductor_match else None,

@@ -311,10 +311,13 @@ export async function pedirComprobacionPeriodica() {
 // Mismas llamadas que decaService, con las cookies de sesión del propio
 // dominio. Los errores imitan a axios ({ response: { status, data } }) para
 // que sincronizarCola los trate igual; un fallo de red lanza sin `response`.
-export function servicioFetch(base) {
+// `empresaId`: la empresa de los DeCA que se envían (v4.38.0, una cuenta en
+// varias empresas) -- viaja como X-Empresa-Id y el servidor la valida.
+export function servicioFetch(base, empresaId = null) {
   let refrescado = false
   async function llamar(metodo, ruta, cuerpo) {
     const opciones = { method: metodo, credentials: 'include', headers: {} }
+    if (empresaId) opciones.headers['X-Empresa-Id'] = String(empresaId)
     if (cuerpo instanceof FormData) opciones.body = cuerpo
     else if (cuerpo !== undefined) {
       opciones.headers['Content-Type'] = 'application/json'
@@ -363,20 +366,35 @@ export function servicioFetch(base) {
 export async function sincronizarDesdeServiceWorker({ base, refrescarAgenda = false }) {
   const sesion = await leerSesionDeca()
   if (!sesion) return null
-  const servicio = servicioFetch(base)
-  let yo
+  // Con varias empresas, cada DeCA de la cola se envía a SU empresa (la que
+  // guardó al hacerlo), no a la de la última pestaña: una petición por
+  // empresa, con su cabecera. Si la persona ya no tiene acceso a una, el
+  // servidor la rechaza y esos DeCA esperan en la cola.
+  let empresasCola = []
   try {
-    yo = (await servicio.yo()).data
-  } catch {
-    return null
-  }
-  const empresaSesion = yo?.empresa && typeof yo.empresa === 'object' ? yo.empresa.id : yo?.empresa
-  if (String(yo?.id) !== String(sesion.usuarioId)) return null
-  if (empresaSesion != null && String(empresaSesion) !== String(sesion.empresaId)) return null
+    const todos = await operacion('cola', 'readonly', (s) => s.getAll())
+    empresasCola = [...new Set((todos || []).filter((i) => i.usuario_id === sesion.usuarioId).map((i) => i.empresa_id))]
+  } catch { /* sin cola legible */ }
+  if (!empresasCola.includes(sesion.empresaId)) empresasCola.push(sesion.empresaId)
 
-  const resultado = await sincronizarCola({ empresaId: sesion.empresaId, usuarioId: sesion.usuarioId, servicio })
-  if (refrescarAgenda) {
-    await prepararDecaSinConexion({ empresaId: sesion.empresaId, usuarioId: sesion.usuarioId, servicio }).catch(() => {})
+  let resultado = null
+  for (const empresaId of empresasCola) {
+    const servicio = servicioFetch(base, empresaId)
+    let yo
+    try {
+      yo = (await servicio.yo()).data
+    } catch {
+      continue
+    }
+    const empresaYo = yo?.empresa && typeof yo.empresa === 'object' ? yo.empresa.id : yo?.empresa
+    if (String(yo?.id) !== String(sesion.usuarioId)) return null
+    if (empresaYo == null || String(empresaYo) !== String(empresaId)) continue
+
+    const r = await sincronizarCola({ empresaId, usuarioId: sesion.usuarioId, servicio })
+    if (empresaId === sesion.empresaId) resultado = r
+    if (refrescarAgenda && empresaId === sesion.empresaId) {
+      await prepararDecaSinConexion({ empresaId, usuarioId: sesion.usuarioId, servicio }).catch(() => {})
+    }
   }
   return resultado
 }

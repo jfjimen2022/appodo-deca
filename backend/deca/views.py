@@ -7,9 +7,11 @@ import csv
 import io
 import logging
 import mimetypes
+import re
 import uuid
 
 from django.conf import settings
+from django.db import transaction
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -46,6 +48,7 @@ from .models import (
     ExpedicionDeca,
     LecturaCampoDeca,
     PlantillaDocumentoDeca,
+    ReferenciaErpDescartada,
     RemolqueDeca,
     TractoraDeca,
     TransportistaSucesivoDeca,
@@ -68,7 +71,7 @@ from .serializers import (
 )
 from .services import (
     aprendizaje_service, auditoria_service, catalogo_service, extraction_ia_service, extraction_service,
-    identificador_service, pdf_service, plantillas_service, qr_service, storage_service,
+    generacion_service, identificador_service, pdf_service, plantillas_service, qr_service, storage_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -105,7 +108,7 @@ CAMPOS_AUDITABLES_EXPEDICION = [
     'nif_destinatario', 'nombre_destinatario',
     'matricula_tractor', 'matricula_remolque', 'sin_remolque', 'autorizacion_especial',
     'origen', 'destino', 'fecha_hora_transporte',
-    'naturaleza_mercancia', 'peso_kg', 'peso_estimado', 'bultos', 'volumen_m3', 'codigo_mercancia',
+    'naturaleza_mercancia', 'peso_kg', 'peso_bruto_kg', 'peso_estimado', 'bultos', 'volumen_m3', 'codigo_mercancia',
     'numero_pedido', 'instrucciones_conductor', 'contacto_emergencias', 'tipo_contenedor',
     'instrucciones_expedidor', 'instrucciones_pago', 'comentarios',
     'nombre_conductor', 'nif_conductor', 'telefono_conductor', 'email_conductor',
@@ -121,6 +124,11 @@ def _texto_dato(valor) -> str:
     if hasattr(valor, 'strftime'):
         return valor.strftime('%d/%m/%Y %H:%M')
     return str(valor)
+
+
+def _url_publica(request, expedicion) -> str:
+    """Dirección pública del DeCA, la que lleva el QR."""
+    return request.build_absolute_uri(reverse('deca-descarga-publica', args=[str(expedicion.token_publico)]))
 
 
 class DecaLecturaPublicaThrottle(AnonRateThrottle):
@@ -151,12 +159,23 @@ class ConfiguracionDecaView(generics.RetrieveUpdateAPIView):
 
 # ─── Expediciones (CRUD) ────────────────────────────────────────────────────
 
+class ExpedicionesDecaPagination(PageNumberPagination):
+    """El pie del listado deja elegir 20/50/100 filas. Con el PageNumberPagination
+    global (50 fijas, sin `page_size_query_param`) ese selector no hacía nada,
+    y con más de 50 expediciones las páginas de la pantalla (de 20 en 20) no
+    cuadraban con las del servidor: la tercera daba error."""
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 class ExpedicionDecaListCreateView(generics.ListCreateAPIView):
     """GET lista paginada, filtrable y ordenable de expediciones; POST crea una
     (borrador). Al crear desde un móvil que estuvo sin cobertura adopta el
     token del QR que ya va impreso en el papel."""
     permission_classes = DECA_PERMS
     serializer_class = ExpedicionDecaSerializer
+    pagination_class = ExpedicionesDecaPagination
     filter_backends = [OrderingFilter]
     # nombre_cargador/transportista/destinatario y matricula_tractor son
     # CharField reales del modelo, ordenables directamente. creado_por y
@@ -165,17 +184,34 @@ class ExpedicionDecaListCreateView(generics.ListCreateAPIView):
     ordering_fields = [
         'fecha_alta', 'fecha_hora_transporte', 'numero_albaran', 'estado',
         'nombre_cargador', 'nombre_transportista', 'nombre_destinatario', 'matricula_tractor',
+        'referencia_externa',
     ]
     ordering = ['-fecha_alta']
 
     def get_queryset(self):
-        qs = ExpedicionDeca.objects.all()
-        estado = self.request.query_params.get('estado')
-        if estado:
-            qs = qs.filter(estado=estado)
-        q = self.request.query_params.get('q')
-        if q:
-            qs = qs.filter(numero_albaran__icontains=q)
+        # Un solo sitio para los filtros: lo usan el listado y sus
+        # exportaciones (_ExportarExpedicionesDecaView), así nunca divergen.
+        qp = self.request.query_params
+        qs = ExpedicionDeca.objects.select_related('clave_integracion', 'creado_por')
+        if qp.get('estado'):
+            qs = qs.filter(estado=qp['estado'])
+        if qp.get('q'):
+            # Nº de albarán o referencia del ERP (lo que llega por la integración).
+            qs = qs.filter(Q(numero_albaran__icontains=qp['q']) | Q(referencia_externa__icontains=qp['q']))
+        # Origen: recibido del ERP por la integración, o hecho a mano aquí.
+        if qp.get('origen') == 'erp':
+            qs = qs.exclude(referencia_externa='')
+        elif qp.get('origen') == 'appodo':
+            qs = qs.filter(referencia_externa='')
+        # El ERP cambió el envío después de emitir el DeCA (aviso en rojo).
+        if qp.get('modificado_erp') == 'true':
+            qs = qs.exclude(cambios_erp=[])
+        # Les falta algo para poder generarse (solo tiene sentido antes de generar).
+        if qp.get('incompletas') == 'true':
+            qs = qs.filter(
+                Q(estado__in=[ExpedicionDeca.Estado.BORRADOR, ExpedicionDeca.Estado.CONFIRMADO])
+                & obligatorios_service.q_incompletas(None)
+            )
         return qs
 
     def create(self, request, *args, **kwargs):
@@ -251,41 +287,60 @@ class ExpedicionDecaDetailView(generics.RetrieveUpdateDestroyAPIView):
                     'junto a los datos anteriores (Resolución de 5 de junio de 2026, apartado quinto).'
                 )})
 
-        expedicion = serializer.save()
+        # Todo o nada: guardar los datos, anotar la modificación, regenerar
+        # el PDF y el evento de historial van en una transacción. Si el PDF
+        # falla, regenerar_tras_correccion lanza ErrorGeneracionDeca y se
+        # deshace TODO, también el UPDATE -- antes los datos nuevos quedaban
+        # guardados con el PDF viejo, y pantalla y documento oficial no
+        # coincidían. El usuario ve el motivo en el aviso rojo del formulario.
+        with transaction.atomic():
+            # serializer.save() ejecuta el UPDATE (ya validado). A partir de aquí
+            # se compara "antes" (copiado arriba) con "después" para el historial.
+            expedicion = serializer.save()
 
-        # Qué campos cambiaron de verdad -- el historial mostraba solo
-        # "Editada" sin decir el qué (pedido explícito del usuario 2026-09-25).
-        cambiados = [
-            campo for campo in CAMPOS_AUDITABLES_EXPEDICION
-            if valores_antes[campo] != getattr(expedicion, campo)
-        ]
-        detalle = f'Campos modificados: {", ".join(cambiados)}.' if cambiados else ''
+            # Qué campos cambiaron de verdad -- el historial mostraba solo
+            # "Editada" sin decir el qué (pedido explícito del usuario 2026-09-25).
+            cambiados = [
+                campo for campo in CAMPOS_AUDITABLES_EXPEDICION
+                if valores_antes[campo] != getattr(expedicion, campo)
+            ]
+            detalle = f'Campos modificados: {", ".join(cambiados)}.' if cambiados else ''
 
-        # Corrección de un DeCA ya generado, dentro del plazo de gracia (ver
-        # ExpedicionDecaSerializer.validate -> puede_editar_generado): el PDF
-        # ya entregado/enlazado por QR queda con datos viejos si no se
-        # regenera -- mismo token público, contenido corregido. NO se toca
-        # fecha_generacion (el plazo de corrección no se alarga al corregir).
-        if corrige_generado and cambiados:
-            ModificacionDeca.objects.create(
-                expedicion=expedicion, usuario=self.request.user, motivo=motivo,
-                cambios=[
-                    {'campo': c, 'antes': _texto_dato(valores_antes[c]), 'despues': _texto_dato(getattr(expedicion, c))}
-                    for c in cambiados
-                ],
+            # Corrección de un DeCA ya generado, dentro del plazo de gracia (ver
+            # ExpedicionDecaSerializer.validate -> puede_editar_generado): el PDF
+            # ya entregado/enlazado por QR queda con datos viejos si no se
+            # regenera -- mismo token público, contenido corregido. NO se toca
+            # fecha_generacion (el plazo de corrección no se alarga al corregir).
+            if corrige_generado and cambiados:
+                ModificacionDeca.objects.create(
+                    expedicion=expedicion, usuario=self.request.user, motivo=motivo,
+                    cambios=[
+                        {'campo': c, 'antes': _texto_dato(valores_antes[c]), 'despues': _texto_dato(getattr(expedicion, c))}
+                        for c in cambiados
+                    ],
+                )
+            # Si el aviso "Modificado en el ERP" estaba puesto, quien corrige ya
+            # lo ha visto: se quita (volverá si el ERP sigue sin coincidir).
+            if corrige_generado and cambiados and (expedicion.cambios_erp or expedicion.cambios_erp_descartados):
+                expedicion.cambios_erp, expedicion.cambios_erp_en, expedicion.cambios_erp_descartados = [], None, []
+                expedicion.save(update_fields=[
+                    'cambios_erp', 'cambios_erp_en', 'cambios_erp_descartados', 'fecha_actualizacion',
+                ])
+            # Se regenera el PDF con el MISMO token/QR (la URL pública no cambia),
+            # para que quien escanee el QR del papel ya impreso vea los datos corregidos.
+            if estado_antes == ExpedicionDeca.Estado.GENERADO and expedicion.estado == ExpedicionDeca.Estado.GENERADO:
+                url_publica = self.request.build_absolute_uri(
+                    reverse('deca-descarga-publica', args=[str(expedicion.token_publico)])
+                )
+                expedicion = generacion_service.regenerar_tras_correccion(expedicion, url_publica)
+                detalle = f'{detalle} Motivo: {motivo}. PDF regenerado tras corrección.'.strip()
+
+            auditoria_service.registrar_evento(
+                expedicion, EventoExpedicionDeca.TipoEvento.EDITADA, usuario=self.request.user, detalle=detalle,
             )
-        if estado_antes == ExpedicionDeca.Estado.GENERADO and expedicion.estado == ExpedicionDeca.Estado.GENERADO:
-            url_publica = self.request.build_absolute_uri(
-                reverse('deca-descarga-publica', args=[str(expedicion.token_publico)])
-            )
-            qr_png = qr_service.generar_qr_png(url_publica)
-            contenido_pdf = pdf_service.generar_pdf_deca(expedicion, qr_png)
-            expedicion = storage_service.regenerar_pdf_tras_correccion(expedicion, contenido_pdf)
-            detalle = f'{detalle} Motivo: {motivo}. PDF regenerado tras corrección.'.strip()
 
-        auditoria_service.registrar_evento(
-            expedicion, EventoExpedicionDeca.TipoEvento.EDITADA, usuario=self.request.user, detalle=detalle,
-        )
+        # La Agenda va fuera: es una comodidad (guardar las fichas para no
+        # volver a teclearlas), no parte de la corrección.
         catalogo_service.guardar_conductor_de(expedicion)
         catalogo_service.guardar_transportista_de(expedicion)
         catalogo_service.guardar_destinatario_de(expedicion)
@@ -309,6 +364,13 @@ class ExpedicionDecaDetailView(generics.RetrieveUpdateDestroyAPIView):
             raise PermissionDenied(
                 'Solo se puede borrar una expedición en borrador, o anulada si nunca llegó a '
                 'generarse el DeCA oficial -- una que sí se generó se conserva por auditoría.'
+            )
+        # Si llegó del ERP, se recuerda para que el conector no la vuelva a
+        # crear en su siguiente pasada (ver ReferenciaErpDescartada).
+        if instance.clave_integracion_id and instance.referencia_externa:
+            ReferenciaErpDescartada.objects.get_or_create(
+                referencia_externa=instance.referencia_externa,
+                defaults={'numero_albaran': instance.numero_albaran, 'descartada_por': self.request.user},
             )
         instance.delete()
 
@@ -662,6 +724,7 @@ def _extraer_campos_de_archivo(archivo, usuario, documento_id, mime_type=None, c
     errores_ia = []
     extras_ia = {}
     texto = ''
+    texto_maquetado = ''
     resultado = {
         'campos_sugeridos': None, 'campos_sugeridos_ia': None, 'campos_a_revisar': [],
         'ia_error': None, 'campos_dudosos': [], 'plantilla_aplicada': None, 'zonas': {},
@@ -675,9 +738,8 @@ def _extraer_campos_de_archivo(archivo, usuario, documento_id, mime_type=None, c
         archivo.seek(0)
         paginas = extraction_service.extraer_texto_por_pagina(archivo)
         texto = '\n'.join(paginas)
-        campos_sugeridos = extraction_service.extraer_campos(
-            texto, extraction_service.extraer_texto_maquetado(archivo),
-        )
+        texto_maquetado = extraction_service.extraer_texto_maquetado(archivo)
+        campos_sugeridos = extraction_service.extraer_campos(texto, texto_maquetado)
     except Exception:
         # Un JPG/PNG (o un PDF ilegible para pypdf) entra por aquí: no es
         # un error, simplemente no hay texto y se resuelve con visión.
@@ -706,8 +768,15 @@ def _extraer_campos_de_archivo(archivo, usuario, documento_id, mime_type=None, c
     pistas = '\n\n'.join(p for p in [pistas, *extra] if p)
 
     if extraction_ia_service.texto_es_util(texto):
+        # A la IA le llega el texto RESPETANDO POSICIONES (una fila de la hoja
+        # = una línea), no el normal de pypdf, que desordena las casillas: en
+        # un CMR real el lugar de entrega (casilla 3) salía pegado a la
+        # etiqueta del porteador (16) y la IA lo puso de transportista. Con el
+        # maquetado acierta (medido con la IA real; un albarán sale igual).
+        # Los huecos largos se acortan para no pasar del límite del prompt.
+        texto_ia = re.sub(r' {4,}', '   ', texto_maquetado) if extraction_ia_service.texto_es_util(texto_maquetado) else texto
         campos_sugeridos_ia = extraction_ia_service.extraer_campos_con_ia(
-            usuario, texto, errores=errores_ia, pistas=pistas, extras=extras_ia,
+            usuario, texto_ia, errores=errores_ia, pistas=pistas, extras=extras_ia,
         )
     else:
         try:
@@ -841,8 +910,14 @@ class DocumentoOrigenDecaUploadView(APIView):
 
     def post(self, request, expedicion_id):
         expedicion = get_object_or_404(ExpedicionDeca, id=expedicion_id)
-        if expedicion.estado != ExpedicionDeca.Estado.BORRADOR:
-            raise PermissionDenied('Solo se pueden añadir documentos a una expedición en borrador.')
+        # Con el DeCA ya emitido se puede seguir ADJUNTANDO (el CMR firmado que
+        # vuelve con el camión, 2026-10-07): el PDF y el QR no lo incluyen, así
+        # que no cambian. Pero no se lee (no hay nada que rellenar) y no se
+        # puede quitar ni cambiar después (DocumentoOrigenDecaDetailView sigue
+        # exigiendo borrador): queda como rastro de auditoría.
+        ya_emitido = expedicion.estado in (ExpedicionDeca.Estado.GENERADO, ExpedicionDeca.Estado.PAPEL)
+        if expedicion.estado != ExpedicionDeca.Estado.BORRADOR and not ya_emitido:
+            raise PermissionDenied('Solo se pueden añadir documentos a una expedición en borrador o ya generada.')
 
         archivo = request.FILES.get('archivo')
         if not archivo:
@@ -860,7 +935,13 @@ class DocumentoOrigenDecaUploadView(APIView):
         # navegador: puede no cuadrar (foto renombrada) y la IA de visión lo usa.
         mime_real = {'pdf': 'application/pdf', 'jpg': 'image/jpeg', 'png': 'image/png'}[tipo_real]
 
-        tipo_documento = request.data.get('tipo_documento', DocumentoOrigenDeca.TipoDocumento.OTRO)
+        tipo_documento = request.data.get('tipo_documento') or DocumentoOrigenDeca.TipoDocumento.OTRO
+        # objects.create() no valida los `choices`: sin esto se guardaba
+        # cualquier texto (y uno de más de 20 caracteres daba un 500 de la BD).
+        if tipo_documento not in DocumentoOrigenDeca.TipoDocumento.values:
+            raise ValidationError({'tipo_documento': (
+                f'Tipo de documento no válido. Opciones: {", ".join(DocumentoOrigenDeca.TipoDocumento.values)}.'
+            )})
 
         documento = DocumentoOrigenDeca.objects.create(
             expedicion=expedicion,
@@ -874,7 +955,7 @@ class DocumentoOrigenDecaUploadView(APIView):
             'campos_sugeridos': None, 'campos_sugeridos_ia': None, 'campos_a_revisar': [],
             'ia_error': None, 'campos_dudosos': [], 'plantilla_aplicada': None,
         }
-        if request.query_params.get('extraer', '').lower() == 'true':
+        if request.query_params.get('extraer', '').lower() == 'true' and not ya_emitido:
             # Se lee `documento.archivo` (ya guardado en storage), NO el
             # `archivo` crudo de `request.FILES` -- ese es exactamente el
             # fichero que abre el botón "Extraer datos"
@@ -897,7 +978,8 @@ class DocumentoOrigenDecaUploadView(APIView):
 
         auditoria_service.registrar_evento(
             expedicion, EventoExpedicionDeca.TipoEvento.DOCUMENTO_SUBIDO,
-            usuario=request.user, detalle=f'{tipo_documento}: {archivo.name}',
+            usuario=request.user,
+            detalle=f'{tipo_documento}: {archivo.name}' + (' (adjuntado con el DeCA ya emitido)' if ya_emitido else ''),
         )
 
         respuesta = DocumentoOrigenDecaSerializer(documento, context={'request': request}).data
@@ -1087,23 +1169,7 @@ class GenerarDecaView(APIView):
         if faltantes:
             raise ValidationError({'campos_faltantes': faltantes})
 
-        # Si la empresa prefiere el contador automático de Appodo
-        # (ConfiguracionDeca.identificador_preferido), numera AQUÍ -- solo
-        # una vez, al generar el documento oficial, nunca en Borrador (no se
-        # "queman" números de expediciones que se acaban borrando) ni de
-        # nuevo en una corrección posterior (ver identificador_service).
-        expedicion = identificador_service.asignar_numero_interno_si_procede(expedicion)
-
-        url_publica = request.build_absolute_uri(
-            reverse('deca-descarga-publica', args=[str(expedicion.token_publico)])
-        )
-        qr_png = qr_service.generar_qr_png(url_publica)
-        contenido_pdf = pdf_service.generar_pdf_deca(expedicion, qr_png)
-        expedicion = storage_service.guardar_pdf_generado(expedicion, contenido_pdf)
-        auditoria_service.registrar_evento(expedicion, EventoExpedicionDeca.TipoEvento.GENERADA, usuario=request.user)
-        # Con los datos ya decididos por una persona: se compara con lo que
-        # leyó la IA y se aprenden los sinónimos de lo que se corrigió.
-        aprendizaje_service.resolver_lecturas(expedicion)
+        expedicion = generacion_service.generar(expedicion, _url_publica(request, expedicion), usuario=request.user)
 
         return Response(ExpedicionDecaSerializer(expedicion, context={'request': request}).data)
 
@@ -1165,6 +1231,29 @@ class AnularExpedicionDecaView(APIView):
         auditoria_service.registrar_evento(
             expedicion, EventoExpedicionDeca.TipoEvento.ANULADA, usuario=request.user, detalle=motivo,
         )
+        return Response(ExpedicionDecaSerializer(expedicion, context={'request': request}).data)
+
+
+class DescartarCambiosErpDecaView(APIView):
+    """Quita el aviso "Modificado en el ERP" sin cambiar el DeCA: alguien lo
+    ha revisado y el DeCA está bien así (p. ej. el cambio en el ERP no afecta
+    a este transporte). Queda en el historial quién lo descartó. Si el ERP
+    vuelve a mandar una diferencia NUEVA, el aviso vuelve."""
+    permission_classes = DECA_PERMS
+
+    def post(self, request, expedicion_id):
+        expedicion = get_object_or_404(ExpedicionDeca, id=expedicion_id)
+        if expedicion.cambios_erp:
+            resumen = '; '.join(f'{d["campo"]}: «{d["en_erp"]}»' for d in expedicion.cambios_erp)
+            expedicion.cambios_erp_descartados = expedicion.cambios_erp
+            expedicion.cambios_erp, expedicion.cambios_erp_en = [], None
+            expedicion.save(update_fields=[
+                'cambios_erp', 'cambios_erp_en', 'cambios_erp_descartados', 'fecha_actualizacion',
+            ])
+            auditoria_service.registrar_evento(
+                expedicion, EventoExpedicionDeca.TipoEvento.CAMBIO_ERP, usuario=request.user,
+                detalle=f'Aviso descartado: el DeCA se deja como estaba ({resumen} en el ERP).',
+            )
         return Response(ExpedicionDecaSerializer(expedicion, context={'request': request}).data)
 
 
@@ -1283,7 +1372,7 @@ class _ExportarExpedicionesDecaView(APIView):
         vista = ExpedicionDecaListCreateView()
         vista.request = request
         expediciones = list(vista.filter_queryset(vista.get_queryset()))
-        filtros = {'estado': qp.get('estado'), 'q': qp.get('q')}
+        filtros = {c: qp.get(c) for c in ('estado', 'q', 'origen', 'modificado_erp', 'incompletas')}
         generado_por = _nombre_usuario(request.user)
         config = _config_informes()
         try:

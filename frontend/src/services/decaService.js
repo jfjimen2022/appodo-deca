@@ -64,6 +64,12 @@ export const decaService = {
   listarSinonimos: (params = {}) => api.get('/api/v1/deca/sinonimos/', { params }),
   borrarSinonimo: (id) => api.delete(`/api/v1/deca/sinonimos/${id}/`),
   precisionLectura: (params = {}) => api.get('/api/v1/deca/precision-lectura/', { params }),
+  // Claves con las que el ERP de la empresa envía albaranes
+  // para generar el DeCA solo. La clave completa solo viene al crearla.
+  descartarCambiosErp: (id) => api.post(`/api/v1/deca/expediciones/${id}/descartar-cambios-erp/`),
+  listarClavesIntegracion: () => api.get('/api/v1/deca/integracion/claves/'),
+  crearClaveIntegracion: (nombre) => api.post('/api/v1/deca/integracion/claves/', { nombre }),
+  revocarClaveIntegracion: (id) => api.post(`/api/v1/deca/integracion/claves/${id}/revocar/`),
   listarPlantillas: () => api.get('/api/v1/deca/plantillas/', { params: { page_size: 500 } }),
   crearPlantilla: (data) => api.post('/api/v1/deca/plantillas/', data),
   actualizarPlantilla: (id, data) => api.patch(`/api/v1/deca/plantillas/${id}/`, data),

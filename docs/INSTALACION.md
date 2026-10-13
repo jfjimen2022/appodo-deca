@@ -107,6 +107,12 @@ modelos de documento) y rellenan el catálogo de Cargadores con los que ya
 había en las expediciones existentes. No hace falta hacer nada a mano; haz
 un backup antes, como en cualquier actualización.
 
+Al pasar de `v02` a `v03` la migración `0004` añade las claves de
+integración con el ERP, los envíos del ERP descartados, el peso bruto y los
+campos de integración de la expedición. Nada que hacer a mano. Si vas a
+conectar el ERP, la guía está en [`INTEGRACION_ERP.md`](INTEGRACION_ERP.md):
+el conector necesita llegar por HTTPS a la URL pública de la instalación.
+
 ## Desarrollo local sin Docker
 
 Ver la sección "Desarrollo local" del [`README.md`](../README.md) principal.

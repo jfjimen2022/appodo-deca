@@ -1,7 +1,7 @@
 # Appodo DeCa
 
 [![Licencia: AGPL v3](https://img.shields.io/badge/Licencia-AGPL%20v3-blue.svg)](LICENSE)
-[![Versión](https://img.shields.io/badge/versión-v02-informational)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/versión-v03-informational)](CHANGELOG.md)
 [![Stack](https://img.shields.io/badge/stack-Django%20%2B%20React-informational)](#stack)
 
 **Appodo DeCa** es una app gratuita, autoalojable (self-hosted) y de código
@@ -129,6 +129,7 @@ Tests: `python manage.py test deca` (backend, necesita PostgreSQL) y
 | Documento | Contenido |
 |---|---|
 | [`docs/MANUAL_USO.md`](docs/MANUAL_USO.md) | Manual de usuario final: cuatro casos paso a paso (móvil, oficina, corrección, sin cobertura), lectura automática, agenda, configuración y preparación de los móviles. |
+| [`docs/INTEGRACION_ERP.md`](docs/INTEGRACION_ERP.md) | Conexión con el ERP de la empresa: claves, API de envío de albaranes, respuestas y cómo escribir el conector. |
 | [`docs/INSTALACION.md`](docs/INSTALACION.md) | Requisitos, variables de entorno, backups, actualización, despliegue. |
 | [`CHANGELOG.md`](CHANGELOG.md) | Registro de versiones y qué trae cada una. |
 | [`docs/PLAN_EXTRACCION.md`](docs/PLAN_EXTRACCION.md) | Cómo se extrajo del ERP Appodo — decisiones de arquitectura, para quien quiera entender el porqué. |
@@ -141,10 +142,11 @@ código bajo la misma licencia.
 
 ## Estado del proyecto
 
-`v02` — sincronizado con el módulo DeCA de Appodo v4.37.0. Suite de tests
-del backend (portada del ERP) y del frontend en verde, y verificado con
-Docker (login → crear expedición → generar DeCA → descarga pública del PDF
-sin sesión). Las capturas de arriba son de `v01`.
+`v03` — sincronizado con el módulo DeCA de Appodo v4.49.3 (incluye la
+conexión con el ERP de la empresa, ver
+[`docs/INTEGRACION_ERP.md`](docs/INTEGRACION_ERP.md)). Suite de tests del
+backend (601 tests, Python 3.12 como la imagen Docker) y del frontend (77
+tests) en verde. Las capturas de arriba son de `v01`.
 Quedan TODOs explícitos en el código (`TODO(standalone):`, ver
 [`CHANGELOG.md`](CHANGELOG.md)) antes de considerarlo listo para producción
 sin supervisión — ver el estado "Conocido / pendiente" de la versión

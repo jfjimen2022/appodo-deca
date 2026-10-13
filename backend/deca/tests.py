@@ -708,6 +708,27 @@ class DecaAPITestCase(APITestCase):
         bloqueado = self.client.delete(f'/api/v1/deca/documentos/{doc2_id}/')
         self.assertEqual(bloqueado.status_code, status.HTTP_403_FORBIDDEN)
 
+        # Pero sí se puede ADJUNTAR uno nuevo (el CMR firmado que vuelve con
+        # el camión): no se lee, no cambia el PDF ni el hash, y tampoco se
+        # puede quitar después.
+        expedicion2 = ExpedicionDeca.objects.get(id=exp2_id)
+        hash_antes = expedicion2.hash_sha256
+        adjuntar = self.client.post(
+            f'/api/v1/deca/expediciones/{exp2_id}/documentos/?extraer=true',
+            {'tipo_documento': 'otro', 'archivo': self._pdf_con_texto('CMR firmado', 'cmr-firmado.pdf')},
+            format='multipart',
+        )
+        self.assertEqual(adjuntar.status_code, status.HTTP_201_CREATED, adjuntar.data)
+        self.assertIsNone(adjuntar.data['campos_sugeridos'])
+        expedicion2.refresh_from_db()
+        self.assertEqual(expedicion2.hash_sha256, hash_antes)
+        self.assertEqual(expedicion2.estado, ExpedicionDeca.Estado.GENERADO)
+        self.assertTrue(expedicion2.eventos.filter(detalle__contains='ya emitido').exists())
+        self.assertEqual(
+            self.client.delete(f'/api/v1/deca/documentos/{adjuntar.data["documento"]["id"]}/').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
     @patch('deca.services.extraction_ia_service.call_vision_api')
     @patch('deca.services.extraction_ia_service.call_text_api')
     def test_extraccion_usa_ia_de_texto_cuando_el_pdf_tiene_capa_de_texto(

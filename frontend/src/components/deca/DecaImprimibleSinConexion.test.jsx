@@ -15,7 +15,7 @@ const ITEM = {
     nombre_transportista: 'Transportes Romero S.L.', nif_transportista: 'B72345678',
     origen: 'Finca La Janda', destino: 'Almacén Distrinorte Huévar',
     matricula_tractor: '4821LKP', sin_remolque: true, matricula_remolque: '',
-    naturaleza_mercancia: 'Aguacate Hass', peso_kg: '18000', bultos: 30,
+    naturaleza_mercancia: 'Aguacate Hass', peso_kg: '18000', peso_bruto_kg: '19500', bultos: 30,
   },
 }
 
@@ -26,7 +26,8 @@ describe('DecaImprimibleSinConexion', () => {
     expect(screen.getByText('offline.imp.copia_cargador')).toBeInTheDocument()
     expect(screen.getAllByText('OFF-ABC-1234')).toHaveLength(2)
     expect(screen.getAllByText('Distrinorte S.A. · A91234567')).toHaveLength(2)
-    expect(screen.getAllByText('18000 kg')).toHaveLength(2)
+    // Neto y bruto en la misma línea.
+    expect(screen.getAllByText('18000 kg · offline.imp.peso_bruto: 19500 kg')).toHaveLength(2)
     expect(screen.getAllByText('offline.imp.sin_remolque')).toHaveLength(2)
     expect(screen.getAllByText('offline.imp.firma_transportista')).toHaveLength(2)
   })

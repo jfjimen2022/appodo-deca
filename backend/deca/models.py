@@ -281,6 +281,68 @@ class ConfiguracionDeca(models.Model):
         return 'Configuración DeCA'
 
 
+class ClaveIntegracionDeca(BaseModel):
+    """Clave con la que un programa externo de la empresa (su ERP, a través
+    de un conector instalado en su red) envía expediciones para que se genere
+    el DeCA sin teclearlo (sync con Appodo v4.40).
+
+    La clave completa se enseña UNA vez, al crearla. Aquí solo se guarda su
+    SHA-256: quien lea la base de datos no puede usarla. El prefijo, que no es
+    secreto, sirve para encontrarla y para que la persona la reconozca en la
+    lista. Una clave revocada no vuelve a funcionar nunca."""
+
+    nombre = models.CharField(max_length=100, help_text='Para reconocerla, p. ej. "ERP - servidor de la oficina".')
+    prefijo = models.CharField(max_length=20, unique=True, editable=False)
+    hash_clave = models.CharField(max_length=64, editable=False)
+    creada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='claves_integracion_deca_creadas', editable=False,
+    )
+    ultimo_uso = models.DateTimeField(null=True, blank=True, editable=False)
+    revocada_en = models.DateTimeField(null=True, blank=True, editable=False)
+    revocada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='claves_integracion_deca_revocadas', editable=False,
+    )
+
+    class Meta:
+        db_table = 'deca_claves_integracion'
+        verbose_name = 'Clave de integración DeCA'
+        verbose_name_plural = 'Claves de integración DeCA'
+        ordering = ['-fecha_alta']
+
+    @property
+    def activa(self) -> bool:
+        return self.revocada_en is None
+
+    def __str__(self) -> str:
+        return f'{self.nombre} ({self.prefijo}…)'
+
+
+class ReferenciaErpDescartada(BaseModel):
+    """Envío del ERP cuyo borrador alguien borró en Appodo (2026-10-06). El
+    conector reenvía cada poco los envíos de los últimos días: sin esto, el
+    borrador borrado volvía a aparecer en la siguiente pasada."""
+
+    referencia_externa = models.CharField(max_length=100)
+    numero_albaran = models.CharField(max_length=100, blank=True)
+    descartada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='referencias_erp_descartadas_deca', editable=False,
+    )
+
+    class Meta:
+        db_table = 'deca_referencias_erp_descartadas'
+        verbose_name = 'Envío del ERP descartado'
+        verbose_name_plural = 'Envíos del ERP descartados'
+        constraints = [
+            models.UniqueConstraint(fields=['referencia_externa'], name='deca_referencia_descartada_unica'),
+        ]
+
+    def __str__(self) -> str:
+        return self.referencia_externa
+
+
 class ExpedicionDeca(BaseModel):
     """Una expedición de transporte con su Documento electrónico de Control
     Administrativo (DeCA). Nace en BORRADOR con los datos extraídos/tecleados
@@ -366,7 +428,11 @@ class ExpedicionDeca(BaseModel):
     fecha_hora_transporte = models.DateTimeField(null=True, blank=True)
 
     naturaleza_mercancia = models.CharField(max_length=255, blank=True)
+    # Peso NETO (solo la mercancía): es el "peso" a secas del DeCA.
     peso_kg = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # Peso BRUTO (con envases y palets), junto al neto en la misma línea
+    # (2026-10-06). La norma solo pide "el peso": basta con uno de los dos.
+    peso_bruto_kg = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     bultos = models.PositiveIntegerField(null=True, blank=True)
     volumen_m3 = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     codigo_mercancia = models.CharField(
@@ -414,6 +480,26 @@ class ExpedicionDeca(BaseModel):
         related_name='expediciones_deca_creadas',
     )
 
+    # DeCA recibido de un programa externo (el ERP de la empresa) a través
+    # de una clave de integración, no tecleado a mano.
+    # La referencia es el identificador del envío en ESE programa: con ella,
+    # reenviar el mismo albarán nunca crea un segundo DeCA.
+    referencia_externa = models.CharField(max_length=100, blank=True, db_index=True)
+    clave_integracion = models.ForeignKey(
+        'deca.ClaveIntegracionDeca', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='expediciones', editable=False,
+    )
+    # El ERP volvió a mandar el envío con datos distintos cuando el DeCA ya
+    # estaba generado: no se toca el DeCA (corregirlo es decisión de una
+    # persona, con su motivo), pero se guarda qué cambió para enseñarlo en
+    # rojo. [{campo, en_deca, en_erp}]. Se vacía al corregir el DeCA, al
+    # descartar el aviso o si el ERP vuelve a coincidir.
+    cambios_erp = models.JSONField(default=list, blank=True, editable=False)
+    cambios_erp_en = models.DateTimeField(null=True, blank=True, editable=False)
+    # Lo que alguien revisó y descartó: si el ERP sigue mandando exactamente
+    # eso, no se vuelve a avisar; si manda algo distinto, sí.
+    cambios_erp_descartados = models.JSONField(default=list, blank=True, editable=False)
+
     class Meta:
         db_table = 'deca_expediciones'
         verbose_name = 'Expedición DeCA'
@@ -426,6 +512,13 @@ class ExpedicionDeca(BaseModel):
                 fields=['referencia_offline'],
                 condition=~models.Q(referencia_offline=''),
                 name='deca_referencia_offline_unica',
+            ),
+            # Lo mismo para lo que llega de un programa externo: un albarán,
+            # un DeCA, aunque el conector lo mande varias veces.
+            models.UniqueConstraint(
+                fields=['referencia_externa'],
+                condition=~models.Q(referencia_externa=''),
+                name='deca_referencia_externa_unica',
             ),
         ]
 
@@ -540,6 +633,7 @@ class EventoExpedicionDeca(BaseModel):
         ANULADA = 'anulada', 'Anulada'
         ENVIADA_EMAIL = 'enviada_email', 'Enviada por email'
         REGISTRADA_PAPEL = 'registrada_papel', 'Registrada como DeCA en papel'
+        CAMBIO_ERP = 'cambio_erp', 'Modificado en el ERP'
 
     expedicion = models.ForeignKey(
         ExpedicionDeca, on_delete=models.CASCADE, related_name='eventos',

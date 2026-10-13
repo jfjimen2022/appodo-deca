@@ -48,5 +48,11 @@
   },
   "errores": {
     "generico": "Ha ocurrido un error inesperado."
+  },
+  "common": {
+    "actualizado_ahora": "Actualizado ahora",
+    "actualizado_hace_segundos": "Actualizado hace {{count}} s",
+    "actualizado_hace_minutos": "Actualizado hace {{count}} min",
+    "refrescar": "Refrescar"
   }
 }

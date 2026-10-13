@@ -48,5 +48,11 @@
   },
   "errores": {
     "generico": "An unexpected error occurred."
+  },
+  "common": {
+    "actualizado_ahora": "Updated just now",
+    "actualizado_hace_segundos": "Updated {{count}} s ago",
+    "actualizado_hace_minutos": "Updated {{count}} min ago",
+    "refrescar": "Refresh"
   }
 }

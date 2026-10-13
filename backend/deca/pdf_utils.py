@@ -11,8 +11,21 @@ NumberedCanvas guarda el estado de cada pagina en `showPage()` (en vez de
 escribirla ya) y, en `save()` (cuando ya se conoce el total), vuelve a
 recorrerlas dibujando el pie con el total correcto en cada una.
 """
+from xml.sax.saxutils import escape as _xml_escape
+
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+
+
+def texto_pdf(texto):
+    """Texto de DATOS listo para meter en un `Paragraph` de reportlab.
+
+    `Paragraph` interpreta su contenido como un mini-XML: un `<`, un `&` o
+    una etiqueta sin cerrar en un nombre, un motivo o un filtro de búsqueda
+    rompe `doc.build()` y el informe entero deja de generarse (auditoría
+    2026-10-10; Visitas ya lo tenía resuelto con su `_p`). Solo el marcado
+    que ponemos NOSOTROS (`<b>`, `<br/>`) va fuera de esta función."""
+    return _xml_escape('' if texto is None else str(texto))
 
 
 class NumberedCanvas(canvas.Canvas):
@@ -74,22 +87,22 @@ def construir_cabecera_documento_controlado(
     hoy = date.today().strftime('%d/%m/%Y')
     data = [
         [
-            Paragraph(f'<b>{config.informe_codigo_documento or "—"}</b>', pequena),
-            Paragraph(f'<b>{empresa_nombre}</b><br/>{titulo_informe}', pequena_bold),
-            Paragraph(f'Versión: {config.informe_version or "—"}', pequena),
+            Paragraph(f'<b>{texto_pdf(config.informe_codigo_documento or "—")}</b>', pequena),
+            Paragraph(f'<b>{texto_pdf(empresa_nombre)}</b><br/>{texto_pdf(titulo_informe)}', pequena_bold),
+            Paragraph(f'Versión: {texto_pdf(config.informe_version or "—")}', pequena),
         ],
         [
-            Paragraph(f'Preparado por: {config.informe_preparado_por or "—"}', pequena),
-            Paragraph(f'Autorizado por: {config.informe_autorizado_por or "—"}', pequena),
-            Paragraph(f'Edición: {config.informe_edicion or "—"}', pequena),
+            Paragraph(f'Preparado por: {texto_pdf(config.informe_preparado_por or "—")}', pequena),
+            Paragraph(f'Autorizado por: {texto_pdf(config.informe_autorizado_por or "—")}', pequena),
+            Paragraph(f'Edición: {texto_pdf(config.informe_edicion or "—")}', pequena),
         ],
         [
-            Paragraph(f'Generado por: {generado_por or "—"}', pequena),
+            Paragraph(f'Generado por: {texto_pdf(generado_por or "—")}', pequena),
             '',
             Paragraph(f'Generado: {hoy}<br/>Total: {total_registros} registros', pequena),
         ],
         [
-            Paragraph(f'<font color="#714B67"><b>Filtro:</b></font> {resumen_filtro}', pequena),
+            Paragraph(f'<font color="#714B67"><b>Filtro:</b></font> {texto_pdf(resumen_filtro)}', pequena),
             '', '',
         ],
     ]

@@ -8,6 +8,11 @@ la pantalla para que listado y exportación nunca se desincronicen.
 import io
 from datetime import date
 
+from core_utils.excel_utils import proteger_hoja
+
+from .pdf_utils import texto_pdf
+
+# Valor guardado en BD del estado -> texto que se ve en el informe.
 ESTADO_LABELS_EXPEDICION = {
     'borrador': 'Borrador',
     'confirmado': 'Confirmado',
@@ -32,6 +37,12 @@ def resumen_filtros_legible_expediciones(filtros: dict | None) -> str:
         partes.append(f'Estado: {ESTADO_LABELS_EXPEDICION.get(filtros["estado"], filtros["estado"])}')
     if filtros.get('q'):
         partes.append(f'Búsqueda: "{filtros["q"]}"')
+    if filtros.get('origen') in ('erp', 'appodo'):
+        partes.append('Recibidos del ERP' if filtros['origen'] == 'erp' else 'Hechos en Appodo')
+    if filtros.get('modificado_erp') == 'true':
+        partes.append('Modificados en el ERP')
+    if filtros.get('incompletas') == 'true':
+        partes.append('Les falta algún dato')
     return ' · '.join(partes) if partes else 'Sin filtros aplicados'
 
 
@@ -44,6 +55,7 @@ COLUMNAS_EXPEDICIONES = {
     'matricula':       {'label': 'Matrícula', 'peso': 10, 'ancho_excel': 14},
     'fecha_transporte': {'label': 'Fecha transporte', 'peso': 12, 'ancho_excel': 18},
     'creado_por':      {'label': 'Creado por', 'peso': 12, 'ancho_excel': 20, 'truncar': 30},
+    'ref_erp':         {'label': 'Ref. ERP', 'peso': 10, 'ancho_excel': 16},
 }
 ORDEN_COLUMNAS_EXPEDICIONES = list(COLUMNAS_EXPEDICIONES.keys())
 
@@ -65,8 +77,11 @@ def _valor_columna_expedicion(col_id, e):
         return _fecha_legible(e.fecha_hora_transporte)
     if col_id == 'creado_por':
         if not e.creado_por_id:
-            return '—'
+            # Llegó del ERP por la integración: no lo creó ninguna persona.
+            return f'ERP ({e.clave_integracion.nombre})' if e.clave_integracion_id else '—'
         return e.creado_por.get_full_name() or e.creado_por.username
+    if col_id == 'ref_erp':
+        return e.referencia_externa or '—'
     return '—'
 
 
@@ -98,12 +113,12 @@ def generar_pdf_expediciones(expediciones, empresa_nombre, config=None, generado
         ))
         elements.append(Spacer(1, 0.2 * inch))
     else:
-        elements.append(Paragraph(f'<b>Listado de Expediciones DeCA — {empresa_nombre}</b>', styles['Title']))
+        elements.append(Paragraph(f'<b>Listado de Expediciones DeCA — {texto_pdf(empresa_nombre)}</b>', styles['Title']))
         elements.append(Spacer(1, 0.1 * inch))
         elements.append(Paragraph(
             f'Generado: {date.today().strftime("%d/%m/%Y")} · Total: {len(expediciones)}', styles['Normal']))
         elements.append(Paragraph(
-            f'<font color="#714B67"><b>Filtro:</b></font> {resumen_filtros_legible_expediciones(filtros)}',
+            f'<font color="#714B67"><b>Filtro:</b></font> {texto_pdf(resumen_filtros_legible_expediciones(filtros))}',
             styles['Normal'],
         ))
         elements.append(Spacer(1, 0.2 * inch))
@@ -118,7 +133,7 @@ def generar_pdf_expediciones(expediciones, empresa_nombre, config=None, generado
         for c in columnas:
             valor = _valor_columna_expedicion(c, e)
             truncar = COLUMNAS_EXPEDICIONES[c].get('truncar')
-            fila.append(Paragraph(valor[:truncar], styles['Normal']) if truncar else valor)
+            fila.append(Paragraph(texto_pdf(valor[:truncar]), styles['Normal']) if truncar else valor)
         data.append(fila)
 
     table = Table(data, colWidths=col_widths, repeatRows=1)
@@ -243,12 +258,12 @@ def generar_pdf_agenda(tipo, fichas, empresa_nombre, config=None, generado_por=N
         ))
         elements.append(Spacer(1, 0.2 * inch))
     else:
-        elements.append(Paragraph(f'<b>{titulo} — {empresa_nombre}</b>', styles['Title']))
+        elements.append(Paragraph(f'<b>{texto_pdf(titulo)} — {texto_pdf(empresa_nombre)}</b>', styles['Title']))
         elements.append(Spacer(1, 0.1 * inch))
         elements.append(Paragraph(
             f'Generado: {date.today().strftime("%d/%m/%Y")} · Total: {len(fichas)}', styles['Normal']))
         elements.append(Paragraph(
-            f'<font color="#714B67"><b>Filtro:</b></font> {resumen_filtros_legible_agenda(filtros)}',
+            f'<font color="#714B67"><b>Filtro:</b></font> {texto_pdf(resumen_filtros_legible_agenda(filtros))}',
             styles['Normal'],
         ))
         elements.append(Spacer(1, 0.2 * inch))
@@ -262,7 +277,7 @@ def generar_pdf_agenda(tipo, fichas, empresa_nombre, config=None, generado_por=N
         for c in columnas:
             valor = _valor_columna_agenda(c, ficha)
             truncar = columnas_def[c].get('truncar')
-            fila.append(Paragraph(valor[:truncar], styles['Normal']) if truncar else valor)
+            fila.append(Paragraph(texto_pdf(valor[:truncar]), styles['Normal']) if truncar else valor)
         data.append(fila)
 
     table = Table(data, colWidths=col_widths, repeatRows=1)
@@ -356,7 +371,7 @@ def generar_pdf_auditoria_expedicion(expedicion, eventos, empresa_nombre, config
         ))
         elements.append(Spacer(1, 0.2 * inch))
     else:
-        elements.append(Paragraph(f'<b>{titulo} — {empresa_nombre}</b>', styles['Title']))
+        elements.append(Paragraph(f'<b>{texto_pdf(titulo)} — {texto_pdf(empresa_nombre)}</b>', styles['Title']))
         elements.append(Spacer(1, 0.1 * inch))
         elements.append(Paragraph(
             f'Generado: {date.today().strftime("%d/%m/%Y")} · Total de eventos: {len(eventos)}', styles['Normal']))
@@ -372,7 +387,7 @@ def generar_pdf_auditoria_expedicion(expedicion, eventos, empresa_nombre, config
         for c in columnas:
             valor = _valor_columna_auditoria(c, evento)
             truncar = COLUMNAS_AUDITORIA[c].get('truncar')
-            fila.append(Paragraph(valor[:truncar], styles['Normal']) if truncar else valor)
+            fila.append(Paragraph(texto_pdf(valor[:truncar]), styles['Normal']) if truncar else valor)
         data.append(fila)
 
     table = Table(data, colWidths=col_widths, repeatRows=1)
@@ -460,6 +475,7 @@ def _generar_excel_generico(
         for idx, c in enumerate(columnas, start=1):
             ws.cell(row=fila, column=idx, value=valor_columna_fn(c, registro))
 
+    proteger_hoja(ws)  # un valor que empiece por '=' nunca se ejecuta como fórmula
     buffer = io.BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
