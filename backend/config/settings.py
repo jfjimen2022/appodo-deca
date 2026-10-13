@@ -25,6 +25,13 @@ SECRET_KEY = env('SECRET_KEY', default='inseguro-cambia-esto-en-produccion')
 DEBUG = env.bool('DEBUG', default=False)
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 
+# Detrás de un proxy con HTTPS (Caddy, Traefik, nginx...) la petición llega al
+# backend por HTTP. El nginx del frontend reenvía la cabecera
+# X-Forwarded-Proto del proxy (ver frontend/nginx.conf): con esto Django sabe
+# que la petición original era https, y la dirección del QR y el admin salen
+# con https:// en vez de http://.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 # Nombre de la empresa que usa esta instalación -- sustituye a
 # `Empresa.nombre` del ERP multiempresa (aparece en el PDF del DeCA, en los
 # informes exportados y en el email de envío). Ver deca/reportes.py,

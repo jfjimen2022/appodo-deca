@@ -2,7 +2,9 @@
 
 Guía de uso para quien gestiona el día a día del transporte (administrativo,
 responsable de muelle, transportista o cargador), sin conocimientos
-técnicos. Para instalar la aplicación, ver [`INSTALACION.md`](INSTALACION.md).
+técnicos. Para instalar la aplicación en un servidor, ver
+[`INSTALACION.md`](INSTALACION.md); para configurarla y dar de alta usuarios,
+[`CONFIGURACION.md`](CONFIGURACION.md).
 
 El DeCA (Documento de Control Administrativo) es obligatorio en el transporte
 de mercancías por carretera según la Orden FOM/2861/2012. Desde el **5 de
@@ -21,10 +23,9 @@ como documento principal.
 7. [La lectura automática y cuándo desconfiar de ella](#7-la-lectura-automática-y-cuándo-desconfiar-de-ella)
 8. [Expediciones, ficha de detalle y estados](#8-expediciones-ficha-de-detalle-y-estados)
 9. [Agenda](#9-agenda)
-10. [Configuración (solo administrador)](#10-configuración-solo-administrador)
+10. [Configuración y usuarios (administrador)](#10-configuración-y-usuarios-administrador)
 11. [Preparar los móviles para trabajar sin cobertura](#11-preparar-los-móviles-para-trabajar-sin-cobertura)
-12. [Usuarios (solo administrador)](#12-usuarios-solo-administrador)
-13. [Si algo no va](#13-si-algo-no-va)
+12. [Si algo no va](#12-si-algo-no-va)
 
 ## 1. Antes de empezar
 
@@ -305,110 +306,25 @@ en vez de duplicarse) y exporta a PDF o Excel.
 Mantén la agenda al día: como manda sobre lo leído, un dato mal guardado en
 una ficha se propagaría a los DeCA siguientes. Corrígelo en la ficha.
 
-## 10. Configuración (solo administrador)
+## 10. Configuración y usuarios (administrador)
 
-La pantalla está en pestañas: **General**, **Avisos y email**, **Lectura de
-documentos**, **Sin cobertura**, **Informes y archivo** y **Conexión con tu
-ERP**. La pestaña va en la dirección (`?seccion=erp`), así se puede enlazar.
-
-- **Papel de tu empresa**: Cargador o Transportista. Como transportista, tu
-  NIF (`EMPRESA_NIF` de la instalación) se precarga en el campo del
-  transportista. La obligación de emitir el DeCA es de los dos a la vez
-  (arts. 4 y 7 de la Orden); esto solo te ahorra trabajo.
-- **Referencia de la expedición**: qué número identifica cada expedición en
-  el asunto del email, el nombre del PDF y el informe de auditoría (nº de
-  albarán, nº de CMR o un contador automático con prefijo).
-- **Acceso público**: días de visibilidad del enlace/QR (mínimo 7), días de
-  retención de las IP de las descargas públicas, horas del **plazo de
-  corrección** tras generar (0 = no se puede corregir) y si se **exigen los
-  datos del destinatario**.
-- **Notificaciones**: canal preferido para conductor, cliente y
-  transportista (de momento el envío es manual, con el botón Email).
-- **Lectura de documentos: la agenda manda** (encendido de fábrica). Ver la
-  [sección 7](#7-la-lectura-automática-y-cuándo-desconfiar-de-ella).
-- **Trabajo en campo y sin cobertura**:
-  - *Sin cobertura, ¿qué hace el móvil?* (se elige uno): **Imprimir en el
-    móvil** (de fábrica), **Guardar y generar al volver la red** (no imprime:
-    solo vale si el camión espera) o **Necesita red**.
-  - *Ejemplares al imprimir* (1 a 3, de fábrica 2): transportista, + cargador,
-    + destinatario.
-  - *Registrar DeCA de papel por foto* (apagado): para el talonario a
-    bolígrafo, último recurso. Exige los mismos datos y al menos una foto;
-    queda como «DeCA en papel», sin PDF ni QR, para que conste en el
-    registro de un año.
-  - *DeCA anticipado — peso estimado* (apagado): generar antes de que llegue
-    el camión con el peso marcado como estimado. El art. 6.d pide el peso de
-    lo transportado: el real hay que ponerlo con Corregir datos antes de que
-    salga. No se puede activar con 0 horas de corrección.
-  - *Aviso de DeCA sin completar* (encendido, 2 días): email a los
-    administradores cuando un DeCA hecho sin cobertura llega al servidor sin
-    poder generarse. Lo envía el servicio programado `scheduler` (ver
-    [`INSTALACION.md`](INSTALACION.md)).
-- **Cabecera de documento controlado**: código, versión, edición, preparado
-  y autorizado por, para los PDF exportados (aspecto de sistema de calidad).
-- **Plantilla del email de envío**: asunto y mensaje por defecto, con
-  marcadores `{identificador}`, `{numero_albaran}`, `{origen}`, `{destino}`,
-  `{matricula_tractor}` y `{empresa}`.
-- **Modelos de documento** y **Precisión de lectura**: ver la
-  [sección 7](#7-la-lectura-automática-y-cuándo-desconfiar-de-ella).
-- **Conexión con tu ERP**: claves de integración para que el ERP de la
-  empresa envíe los albaranes y se genere el DeCA solo. La clave se enseña
-  una sola vez; revocarla corta el acceso al momento. Guía técnica:
-  [`INTEGRACION_ERP.md`](INTEGRACION_ERP.md).
-
-Los cambios llegan a cada móvil la próxima vez que abra la aplicación con
-red. Un móvil que ya está en el campo sin cobertura sigue con lo que tenía
-guardado.
+La configuración de la aplicación, el alta de usuarios, la carga inicial de
+la agenda y la conexión con el ERP están en la guía del administrador:
+[`CONFIGURACION.md`](CONFIGURACION.md).
 
 ## 11. Preparar los móviles para trabajar sin cobertura
 
-Una vez por móvil, con red y antes de salir al campo (unos 5 minutos). La
-misma guía está en Configuración → Trabajo en campo. **Requisito de la
-instalación**: tiene que servirse por **HTTPS** (los navegadores solo
-permiten trabajar sin conexión en páginas seguras o en `localhost`).
+Una vez por móvil, con red y antes de salir al campo: instalar la app desde
+el navegador, iniciar sesión desde el icono y comprobar que pone «Listo para
+trabajar sin cobertura». Los pasos para Android e iPhone están en
+[`CONFIGURACION.md` §5](CONFIGURACION.md#5-preparar-los-móviles) y en la
+propia aplicación (Configuración → Sin cobertura).
 
-**Android · Chrome (recomendado)**
+Lo que tienes que recordar cada día: abre siempre la app desde el icono,
+ábrela con red al menos una vez por semana y no borres los datos del
+navegador si tienes DeCA pendientes de registrar.
 
-1. Abre la dirección de tu instalación en Chrome e inicia sesión con el
-   usuario de esa persona.
-2. Expediciones → **Nuevo DeCA** → **Instalar Appodo DeCa en este móvil**
-   (o menú ⋮ → «Instalar aplicación»).
-3. Ábrela siempre desde el icono. Acepta las notificaciones.
-4. Quita a Chrome el ahorro de batería extremo si lo tiene.
-5. Empareja la impresora de la caseta o comprueba «Guardar como PDF».
-6. Comprueba que pone «Listo para trabajar sin cobertura».
-
-Al volver la red, los DeCA se registran solos aunque la app esté cerrada.
-
-**iPhone · Safari o Chrome**
-
-1. Abre la dirección de tu instalación.
-2. **Obligatorio**: Compartir → «Añadir a pantalla de inicio» (desde el
-   navegador, el iPhone borra los datos de una web no abierta en 7 días,
-   incluidos los DeCA pendientes).
-3. Abre la app desde el icono e inicia sesión **ahí**: no comparte sesión
-   ni datos con el navegador.
-4. Impresora con AirPrint o «Guardar en Archivos».
-5. Comprueba «Listo para trabajar sin cobertura».
-
-Al volver la red hay que **abrir la app** para que se registren: el iPhone
-no lo hace en segundo plano.
-
-**En los dos**: un usuario por móvil; abrir la app con red al menos una vez
-por semana (la sesión caduca a los 7 días y los pendientes esperan); no
-borrar los datos del navegador con DeCA pendientes. Antes del primer día,
-prueba con el modo avión: rellenar, imprimir con QR, quitar el modo avión y
-ver en Expediciones que aparece «Emitido sin conexión»; después anula ese
-DeCA de prueba.
-
-## 12. Usuarios (solo administrador)
-
-Alta, edición y baja de cuentas. El único permiso a decidir es
-**Administrador** (marcado = ve Configuración y Usuarios; sin marcar = solo
-Expediciones y Agenda). Las contraseñas las fija y cambia el administrador
-desde esta pantalla.
-
-## 13. Si algo no va
+## 12. Si algo no va
 
 - **La foto no se ha leído bien**: repítela con buena luz y el papel entero,
   o rellena a mano. Si avisa de una foto movida o con reflejos, hazla otra

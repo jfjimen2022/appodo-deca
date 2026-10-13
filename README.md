@@ -1,7 +1,7 @@
 # Appodo DeCa
 
 [![Licencia: AGPL v3](https://img.shields.io/badge/Licencia-AGPL%20v3-blue.svg)](LICENSE)
-[![Versión](https://img.shields.io/badge/versión-v03-informational)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/versión-v03.1-informational)](CHANGELOG.md)
 [![Stack](https://img.shields.io/badge/stack-Django%20%2B%20React-informational)](#stack)
 
 **Appodo DeCa** es una app gratuita, autoalojable (self-hosted) y de código
@@ -65,9 +65,19 @@ CRM, gestión multiempresa...), esa es la versión de pago.
   configurable, referencia de expedición configurable (albarán, CMR o
   contador automático) y validación del contenido real de cada fichero
   subido (PDF sin JavaScript ni adjuntos, imágenes íntegras, HEIC de iPhone).
+- **Conexión con el ERP de la empresa**: API con clave para que el programa
+  de gestión mande los albaranes y el DeCA se genere solo, sin duplicar lo
+  hecho a mano y avisando si el ERP cambia algo después de emitirlo.
 - Roles admin/operador.
 
-Manual de uso completo: [`docs/MANUAL_USO.md`](docs/MANUAL_USO.md).
+## Por dónde empezar
+
+| Si eres… | Lee |
+|---|---|
+| Quien va a **instalarlo** en un servidor | [`docs/INSTALACION.md`](docs/INSTALACION.md): requisitos, `.env`, HTTPS, email, IA, copias de seguridad y actualizaciones. |
+| Quien lo va a **dejar configurado** para la empresa | [`docs/CONFIGURACION.md`](docs/CONFIGURACION.md): usuarios, configuración pestaña a pestaña, agenda inicial y móviles. |
+| Quien lo **usa a diario** (oficina, muelle, transportista) | [`docs/MANUAL_USO.md`](docs/MANUAL_USO.md): hacer, corregir y anular DeCA, también sin cobertura. |
+| Quien va a **conectar el ERP** | [`docs/INTEGRACION_ERP.md`](docs/INTEGRACION_ERP.md): la API y cómo escribir el conector. |
 
 ## Capturas
 
@@ -92,15 +102,16 @@ git clone https://github.com/jfjimen2022/appodo-deca.git
 cd appodo-deca
 cp .env.example .env
 # edita .env: al menos SECRET_KEY, DB_PASSWORD, EMPRESA_NOMBRE
-docker compose up -d
+docker compose up -d --build
 docker compose exec backend python manage.py createsuperuser
 ```
 
-La app queda en `http://localhost:8080` (puerto configurable con
-`HTTP_PORT` en `.env`).
+Para **probarlo en tu PC**: la app queda en `http://localhost:8080` (puerto
+configurable con `HTTP_PORT` en `.env`). Desde otro equipo hace falta HTTPS:
+sin él, el navegador no deja iniciar sesión ni instalar la app en el móvil.
 
-Ver [`docs/INSTALACION.md`](docs/INSTALACION.md) para requisitos completos,
-variables de entorno, backups y despliegue en un VPS.
+Para **usarlo en la empresa** (dominio propio, HTTPS, email, IA, copias de
+seguridad), sigue [`docs/INSTALACION.md`](docs/INSTALACION.md) paso a paso.
 
 ## Desarrollo local (sin Docker)
 
@@ -128,9 +139,10 @@ Tests: `python manage.py test deca` (backend, necesita PostgreSQL) y
 
 | Documento | Contenido |
 |---|---|
-| [`docs/MANUAL_USO.md`](docs/MANUAL_USO.md) | Manual de usuario final: cuatro casos paso a paso (móvil, oficina, corrección, sin cobertura), lectura automática, agenda, configuración y preparación de los móviles. |
+| [`docs/INSTALACION.md`](docs/INSTALACION.md) | Guía de instalación en un servidor propio: requisitos, `.env`, primer arranque, HTTPS (Caddy o nginx), email, IA, tareas programadas, copias de seguridad, actualización, problemas frecuentes y lista de seguridad. |
+| [`docs/CONFIGURACION.md`](docs/CONFIGURACION.md) | Guía del administrador: puesta en marcha, usuarios, configuración pestaña a pestaña, carga de la agenda, móviles, conexión con el ERP y mantenimiento. |
+| [`docs/MANUAL_USO.md`](docs/MANUAL_USO.md) | Manual de usuario: cuatro casos paso a paso (móvil, oficina, corrección, sin cobertura), lectura automática, expediciones y agenda. |
 | [`docs/INTEGRACION_ERP.md`](docs/INTEGRACION_ERP.md) | Conexión con el ERP de la empresa: claves, API de envío de albaranes, respuestas y cómo escribir el conector. |
-| [`docs/INSTALACION.md`](docs/INSTALACION.md) | Requisitos, variables de entorno, backups, actualización, despliegue. |
 | [`CHANGELOG.md`](CHANGELOG.md) | Registro de versiones y qué trae cada una. |
 | [`docs/PLAN_EXTRACCION.md`](docs/PLAN_EXTRACCION.md) | Cómo se extrajo del ERP Appodo — decisiones de arquitectura, para quien quiera entender el porqué. |
 

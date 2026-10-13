@@ -1,16 +1,17 @@
 """Rutas raíz del proyecto: admin de Django, autenticación JWT en cookies
 HttpOnly (/api/v1/auth/...), el endpoint /auth/me/ con el usuario y la
 empresa de la instalación, y todas las rutas de DeCA bajo /api/v1/
-(deca/urls.py). En DEBUG sirve además /media/."""
+(deca/urls.py). /media/ (documentos y PDF) solo con sesión iniciada:
+ver core_utils/media_protegida.py."""
 
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core_utils.media_protegida import servir_media_protegido
 from deca.auth_views import CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView
 
 
@@ -55,7 +56,7 @@ urlpatterns = [
     path('api/v1/auth/logout/', LogoutView.as_view(), name='auth-logout'),
     path('api/v1/auth/me/', MeView.as_view(), name='auth-me'),
     path('api/v1/', include('deca.urls')),
+    # Documentos subidos y PDF generados: solo con sesión iniciada, también
+    # en producción (DEBUG=False). Lo que abre el QR va por la API pública.
+    re_path(r'^media/(?P<path>.*)$', servir_media_protegido, name='media-protegido'),
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

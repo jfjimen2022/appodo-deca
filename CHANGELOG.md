@@ -6,6 +6,30 @@ SemVer del ERP Appodo — cada entrada que proviene de un resync de código
 anota además la versión y fecha de Appodo de origen (ver
 `docs/PLAN_EXTRACCION.md`, sección "Nombre y versión").
 
+## [v03.1] — 2026-10-13
+
+### Corregido
+
+- **Documentos subidos en producción**: con `DEBUG=False` los enlaces a
+  `/media/` (documentos origen y PDF) daban 404. Ahora los sirve el backend,
+  **solo a usuarios con sesión iniciada** (`core_utils/media_protegida.py`);
+  sin sesión, 404.
+- **QR detrás de un proxy HTTPS**: la dirección del QR salía con `http://`.
+  El nginx del frontend reenvía ahora `X-Forwarded-Proto` del proxy y Django
+  lo respeta (`SECURE_PROXY_SSL_HEADER`). Afecta solo a los DeCA nuevos.
+
+### Documentación
+
+- `docs/INSTALACION.md` reescrita como guía completa para instalar en un
+  servidor propio: requisitos, `.env` comentado con ejemplo de producción,
+  HTTPS con Caddy o nginx, SMTP, Gemini (y protección de datos), tareas
+  programadas, backups con restauración, actualización, problemas frecuentes
+  y lista de seguridad.
+- Nueva `docs/CONFIGURACION.md` (guía del administrador): puesta en marcha,
+  usuarios, configuración pestaña a pestaña, carga de la agenda, móviles,
+  ERP y mantenimiento. `docs/MANUAL_USO.md` queda para el usuario diario.
+- README con «Por dónde empezar» según quién lo lee.
+
 ## [v03] — 2026-10-13
 
 Resync del módulo DeCA del ERP Appodo: lo funcional de las versiones 4.38 a

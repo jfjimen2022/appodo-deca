@@ -438,3 +438,47 @@ class AiClientTests(APITestCase):
         mock_call.return_value = '{"nif_cargador": "B12345674", "campo_desconocido": "x"}'
         resultado = extraction_ia_service.extraer_campos_con_ia(None, 'texto')
         self.assertEqual(resultado, {'nif_cargador': 'B12345674'})
+
+
+class MediaProtegidaTests(APITestCase):
+    """/media/ (documentos subidos y PDF generados) también funciona con
+    DEBUG=False, pero solo con sesión iniciada: sin ella, 404."""
+
+    def setUp(self):
+        import tempfile
+        self.media = tempfile.mkdtemp()
+        self.addCleanup(__import__('shutil').rmtree, self.media, True)
+        with open(f'{self.media}/albaran.txt', 'w', encoding='utf-8') as f:
+            f.write('contenido')
+        User.objects.create_user(username='mediauser', email='m@test.local', password='Media123!')
+
+    def test_sin_sesion_404_y_con_sesion_el_fichero(self):
+        with override_settings(MEDIA_ROOT=self.media, DEBUG=False):
+            self.assertEqual(self.client.get('/media/albaran.txt').status_code, status.HTTP_404_NOT_FOUND)
+            self.client.post(
+                reverse('token_obtain_pair'), {'username': 'mediauser', 'password': 'Media123!'}, format='json',
+            )
+            respuesta = self.client.get('/media/albaran.txt')
+            self.assertEqual(respuesta.status_code, status.HTTP_200_OK)
+            self.assertEqual(b''.join(respuesta.streaming_content), b'contenido')
+            # Nada fuera de MEDIA_ROOT, aunque haya sesión (400 o 404, nunca el fichero).
+            fuera = self.client.get('/media/../config/settings.py')
+            self.assertIn(fuera.status_code, (status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND))
+
+
+class ProxyHttpsTests(APITestCase):
+    """Detrás de un proxy con HTTPS, la dirección del QR sale con https://."""
+
+    def test_url_publica_respeta_x_forwarded_proto(self):
+        import uuid as _uuid
+        from types import SimpleNamespace
+
+        from rest_framework.test import APIRequestFactory
+
+        from .views import _url_publica
+
+        expedicion = SimpleNamespace(token_publico=_uuid.uuid4())
+        detras_de_https = APIRequestFactory().get('/', HTTP_X_FORWARDED_PROTO='https', HTTP_HOST='localhost')
+        sin_proxy = APIRequestFactory().get('/', HTTP_HOST='localhost')
+        self.assertTrue(_url_publica(detras_de_https, expedicion).startswith('https://localhost/'))
+        self.assertTrue(_url_publica(sin_proxy, expedicion).startswith('http://localhost/'))

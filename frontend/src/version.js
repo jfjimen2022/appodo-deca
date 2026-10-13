@@ -1,6 +1,6 @@
 // Versión propia del standalone (independiente del SemVer del ERP Appodo).
 // Sube manualmente en cada release de Appodo DeCa -- ver CHANGELOG.md.
-export const APP_VERSION = 'v03'
+export const APP_VERSION = 'v03.1'
 
 // Última vez que se trajeron mejoras del módulo DeCA del ERP Appodo hacia
 // aquí. NO se actualiza sola -- el standalone no tiene forma de saber la
