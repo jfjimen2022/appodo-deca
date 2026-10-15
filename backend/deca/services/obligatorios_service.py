@@ -14,8 +14,9 @@ revisado contra el BOE el 2026-09-30):
 - g) matrícula; en un conjunto articulado, **tractora y remolque** (el
   remolque se exige salvo que se marque `sin_remolque`: camión rígido).
 
-Además, por decisión del usuario (2026-09-30), los **bultos** también son
-obligatorios aunque la norma no los pide. **Nada del destinatario**: sus
+Los **bultos** (cajas y palets) NO son obligatorios: lo fueron por decisión
+del usuario (2026-09-30) y dejaron de serlo el 2026-10-14, porque la norma no
+los pide (revisados la Orden y la Resolución de 5-jun-2026). **Nada del destinatario**: sus
 datos solo cuentan si la empresa lo activa
 (`ConfiguracionDeca.exigir_datos_destinatario`, desactivado por defecto).
 """
@@ -26,7 +27,7 @@ CAMPOS_OBLIGATORIOS_PARA_CONFIRMAR = [
     'nif_transportista', 'nombre_transportista',
     'nif_destinatario', 'nombre_destinatario',
     'matricula_tractor', 'matricula_remolque', 'origen', 'destino',
-    'fecha_hora_transporte', 'naturaleza_mercancia', 'peso_kg', 'bultos',
+    'fecha_hora_transporte', 'naturaleza_mercancia', 'peso_kg',
 ]
 
 CAMPOS_DESTINATARIO = ('nif_destinatario', 'nombre_destinatario')

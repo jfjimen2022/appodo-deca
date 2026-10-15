@@ -55,7 +55,8 @@ Content-Type: application/json
   "naturaleza_mercancia": "Aguacate",
   "peso_neto_kg": "14200.50",
   "peso_bruto_kg": "15320.00",
-  "bultos": 1260
+  "bultos_palets": 32,
+  "bultos_cajas": 1260
 }
 ```
 
@@ -69,7 +70,8 @@ Content-Type: application/json
 | `matricula_tractor` | Para generar | Sin espacios ni guiones. Admite españolas actuales y antiguas, remolques con R y extranjeras. |
 | `matricula_remolque` o `sin_remolque: true` | Para generar | `sin_remolque` es para los camiones rígidos. |
 | `origen`, `destino`, `fecha_hora_transporte` | Para generar | La fecha va en hora local (`TIME_ZONE` del `.env`) y sin zona horaria. |
-| `naturaleza_mercancia`, `bultos` | Para generar | |
+| `naturaleza_mercancia` | Para generar | |
+| `bultos_palets`, `bultos_cajas` | No | Número de palets y número de cajas. En el DeCA van en la misma línea: *Bultos palets … Bultos cajas …*. La norma no exige los bultos. `bultos` (el nombre antiguo) sigue valiendo para las cajas y, si se manda, tiene prioridad sobre `bultos_cajas`. |
 | `peso_neto_kg`, `peso_bruto_kg` | Para generar (al menos uno) | El DeCA lleva los dos en la misma línea: *Peso neto … Peso bruto …*. El que no llegue sale como "—". |
 | `peso_kg` | No | Otro nombre del peso neto. Si se manda, tiene prioridad sobre `peso_neto_kg`. |
 | `nif_destinatario`, `nombre_destinatario` | Según la configuración | Solo obligatorios si se ha activado en Configuración. |
@@ -100,7 +102,8 @@ Cualquier otro campo se ignora, incluidos `estado`, `token_publico` y
 | Referencia nueva a la que le falta algo | `201`, `estado: "borrador"`, `campos_faltantes: [...]` | Lo deja en borrador. Nunca se inventa un dato. |
 | Misma referencia, todavía en borrador | `200`, `ya_existia: true` | Lo actualiza con los datos nuevos y vuelve a intentar generarlo. |
 | Misma referencia, ya generado o en papel, con los mismos datos | `200`, `ya_existia: true` | Nada. |
-| Misma referencia, ya generado o en papel, **con datos distintos** | `200`, `ya_existia: true`, `cambios_erp: [...]` | **El DeCA no se cambia.** En Expediciones aparece la etiqueta roja **"Modificado en el ERP"** y, en la ficha, cada diferencia. Una persona lo corrige (si está en plazo y con su motivo), lo anula, o descarta el aviso si no afecta al transporte. Un dato que el ERP manda vacío no cuenta como cambio. |
+| Misma referencia, ya generado y **fuera del plazo de corrección** (o en papel), con datos distintos | `200`, `ya_existia: true`, `cambios_erp: []` | Nada: el DeCA ya no puede cambiar, así que no se avisa. |
+| Misma referencia, ya generado y **dentro del plazo de corrección**, **con datos distintos** | `200`, `ya_existia: true`, `cambios_erp: [...]` | **El DeCA no se cambia.** En Expediciones aparece la etiqueta roja **"Modificado en el ERP"** y, en la ficha, cada diferencia. En la ficha, una pregunta de sí o no: **«Sí, pasar los cambios al DeCA»** lo corrige con los datos del ERP (solo en plazo; motivo automático con la referencia; PDF nuevo con el mismo QR). Si nadie contesta antes de que venza el plazo, el aviso se cierra solo y queda anotado en el historial (el DeCA ya no puede cambiar). **«No, el DeCA está bien»** quita el aviso. Un dato que el ERP manda vacío no cuenta como cambio. |
 | El mismo albarán ya se hizo **a mano** | `200`, `ya_existia: true` | No se crea otro: el DeCA hecho a mano se enlaza con la referencia del ERP (y se borra el borrador del ERP que lo duplicaba). El ERP nunca modifica un DeCA hecho a mano. El número de albarán se compara sin espacios (`AV1 / 481` = `AV1/481`). |
 | Alguien **borró** el borrador que creó el ERP | `200`, `estado: "descartado"` | No vuelve a aparecer aunque el conector lo reenvíe. |
 | Misma referencia, anulado | `200`, `ya_existia: true` | Nada. |

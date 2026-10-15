@@ -70,7 +70,7 @@ from .serializers import (
     TransportistaSucesivoDecaSerializer,
 )
 from .services import (
-    aprendizaje_service, auditoria_service, catalogo_service, extraction_ia_service, extraction_service,
+    aprendizaje_service, auditoria_service, avisos_erp_service, catalogo_service, extraction_ia_service, extraction_service,
     generacion_service, identificador_service, pdf_service, plantillas_service, qr_service, storage_service,
 )
 
@@ -108,7 +108,7 @@ CAMPOS_AUDITABLES_EXPEDICION = [
     'nif_destinatario', 'nombre_destinatario',
     'matricula_tractor', 'matricula_remolque', 'sin_remolque', 'autorizacion_especial',
     'origen', 'destino', 'fecha_hora_transporte',
-    'naturaleza_mercancia', 'peso_kg', 'peso_bruto_kg', 'peso_estimado', 'bultos', 'volumen_m3', 'codigo_mercancia',
+    'naturaleza_mercancia', 'peso_kg', 'peso_bruto_kg', 'peso_estimado', 'bultos', 'bultos_palets', 'volumen_m3', 'codigo_mercancia',
     'numero_pedido', 'instrucciones_conductor', 'contacto_emergencias', 'tipo_contenedor',
     'instrucciones_expedidor', 'instrucciones_pago', 'comentarios',
     'nombre_conductor', 'nif_conductor', 'telefono_conductor', 'email_conductor',
@@ -192,6 +192,9 @@ class ExpedicionDecaListCreateView(generics.ListCreateAPIView):
         # Un solo sitio para los filtros: lo usan el listado y sus
         # exportaciones (_ExportarExpedicionesDecaView), así nunca divergen.
         qp = self.request.query_params
+        # Antes de listar, se cierran los avisos del ERP ya caducados: así el
+        # filtro "Modificados en el ERP" y la etiqueta roja nunca los enseñan.
+        avisos_erp_service.caducar_avisos_erp()
         qs = ExpedicionDeca.objects.select_related('clave_integracion', 'creado_por')
         if qp.get('estado'):
             qs = qs.filter(estado=qp['estado'])
@@ -267,86 +270,13 @@ class ExpedicionDecaDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ExpedicionDecaSerializer
     queryset = ExpedicionDeca.objects.all()
 
+    def get_object(self):
+        # Igual que el listado: la ficha no enseña un aviso del ERP caducado.
+        avisos_erp_service.caducar_avisos_erp()
+        return super().get_object()
+
     def perform_update(self, serializer):
-        instance = serializer.instance
-        estado_antes = instance.estado
-        valores_antes = {campo: getattr(instance, campo) for campo in CAMPOS_AUDITABLES_EXPEDICION}
-
-        # Corregir un DeCA YA GENERADO exige motivo: la Resolución de
-        # 5-jun-2026 (BOE-A-2026-12784, apartado quinto) obliga a añadir al PDF
-        # los datos nuevos "así como el motivo del cambio" y conservar los
-        # antiguos marcados como no válidos. Se comprueba ANTES de guardar.
-        motivo = (self.request.data.get('motivo_modificacion') or '').strip()
-        corrige_generado = estado_antes == ExpedicionDeca.Estado.GENERADO
-        if corrige_generado:
-            nuevos = serializer.validated_data
-            va_a_cambiar = [c for c in CAMPOS_AUDITABLES_EXPEDICION if c in nuevos and nuevos[c] != valores_antes[c]]
-            if va_a_cambiar and not motivo:
-                raise ValidationError({'motivo_modificacion': (
-                    'Indica el motivo de la corrección: la norma exige que conste en el propio DeCA, '
-                    'junto a los datos anteriores (Resolución de 5 de junio de 2026, apartado quinto).'
-                )})
-
-        # Todo o nada: guardar los datos, anotar la modificación, regenerar
-        # el PDF y el evento de historial van en una transacción. Si el PDF
-        # falla, regenerar_tras_correccion lanza ErrorGeneracionDeca y se
-        # deshace TODO, también el UPDATE -- antes los datos nuevos quedaban
-        # guardados con el PDF viejo, y pantalla y documento oficial no
-        # coincidían. El usuario ve el motivo en el aviso rojo del formulario.
-        with transaction.atomic():
-            # serializer.save() ejecuta el UPDATE (ya validado). A partir de aquí
-            # se compara "antes" (copiado arriba) con "después" para el historial.
-            expedicion = serializer.save()
-
-            # Qué campos cambiaron de verdad -- el historial mostraba solo
-            # "Editada" sin decir el qué (pedido explícito del usuario 2026-09-25).
-            cambiados = [
-                campo for campo in CAMPOS_AUDITABLES_EXPEDICION
-                if valores_antes[campo] != getattr(expedicion, campo)
-            ]
-            detalle = f'Campos modificados: {", ".join(cambiados)}.' if cambiados else ''
-
-            # Corrección de un DeCA ya generado, dentro del plazo de gracia (ver
-            # ExpedicionDecaSerializer.validate -> puede_editar_generado): el PDF
-            # ya entregado/enlazado por QR queda con datos viejos si no se
-            # regenera -- mismo token público, contenido corregido. NO se toca
-            # fecha_generacion (el plazo de corrección no se alarga al corregir).
-            if corrige_generado and cambiados:
-                ModificacionDeca.objects.create(
-                    expedicion=expedicion, usuario=self.request.user, motivo=motivo,
-                    cambios=[
-                        {'campo': c, 'antes': _texto_dato(valores_antes[c]), 'despues': _texto_dato(getattr(expedicion, c))}
-                        for c in cambiados
-                    ],
-                )
-            # Si el aviso "Modificado en el ERP" estaba puesto, quien corrige ya
-            # lo ha visto: se quita (volverá si el ERP sigue sin coincidir).
-            if corrige_generado and cambiados and (expedicion.cambios_erp or expedicion.cambios_erp_descartados):
-                expedicion.cambios_erp, expedicion.cambios_erp_en, expedicion.cambios_erp_descartados = [], None, []
-                expedicion.save(update_fields=[
-                    'cambios_erp', 'cambios_erp_en', 'cambios_erp_descartados', 'fecha_actualizacion',
-                ])
-            # Se regenera el PDF con el MISMO token/QR (la URL pública no cambia),
-            # para que quien escanee el QR del papel ya impreso vea los datos corregidos.
-            if estado_antes == ExpedicionDeca.Estado.GENERADO and expedicion.estado == ExpedicionDeca.Estado.GENERADO:
-                url_publica = self.request.build_absolute_uri(
-                    reverse('deca-descarga-publica', args=[str(expedicion.token_publico)])
-                )
-                expedicion = generacion_service.regenerar_tras_correccion(expedicion, url_publica)
-                detalle = f'{detalle} Motivo: {motivo}. PDF regenerado tras corrección.'.strip()
-
-            auditoria_service.registrar_evento(
-                expedicion, EventoExpedicionDeca.TipoEvento.EDITADA, usuario=self.request.user, detalle=detalle,
-            )
-
-        # La Agenda va fuera: es una comodidad (guardar las fichas para no
-        # volver a teclearlas), no parte de la corrección.
-        catalogo_service.guardar_conductor_de(expedicion)
-        catalogo_service.guardar_transportista_de(expedicion)
-        catalogo_service.guardar_destinatario_de(expedicion)
-        catalogo_service.guardar_cargador_de(expedicion)
-        catalogo_service.guardar_tractora_de(expedicion)
-        catalogo_service.guardar_remolque_de(expedicion)
+        guardar_edicion(self.request, serializer, (self.request.data.get('motivo_modificacion') or '').strip())
 
     def perform_destroy(self, instance):
         # Borrable en dos casos, ambos sin rastro de un DeCA oficial ya
@@ -373,6 +303,91 @@ class ExpedicionDecaDetailView(generics.RetrieveUpdateDestroyAPIView):
                 defaults={'numero_albaran': instance.numero_albaran, 'descartada_por': self.request.user},
             )
         instance.delete()
+
+
+def guardar_edicion(request, serializer, motivo: str) -> ExpedicionDeca:
+    """Guarda una edición ya validada por el serializer. La usan la edición
+    normal y "Sí, pasar los cambios del ERP al DeCA" (AplicarCambiosErpDecaView),
+    para que las dos corrijan igual: plazo, motivo, PDF regenerado e historial."""
+    instance = serializer.instance
+    estado_antes = instance.estado
+    valores_antes = {campo: getattr(instance, campo) for campo in CAMPOS_AUDITABLES_EXPEDICION}
+
+    # Corregir un DeCA YA GENERADO exige motivo: la Resolución de
+    # 5-jun-2026 (BOE-A-2026-12784, apartado quinto) obliga a añadir al PDF
+    # los datos nuevos "así como el motivo del cambio" y conservar los
+    # antiguos marcados como no válidos. Se comprueba ANTES de guardar.
+    corrige_generado = estado_antes == ExpedicionDeca.Estado.GENERADO
+    if corrige_generado:
+        nuevos = serializer.validated_data
+        va_a_cambiar = [c for c in CAMPOS_AUDITABLES_EXPEDICION if c in nuevos and nuevos[c] != valores_antes[c]]
+        if va_a_cambiar and not motivo:
+            raise ValidationError({'motivo_modificacion': (
+                'Indica el motivo de la corrección: la norma exige que conste en el propio DeCA, '
+                'junto a los datos anteriores (Resolución de 5 de junio de 2026, apartado quinto).'
+            )})
+
+    # Todo o nada: guardar los datos, anotar la modificación, regenerar
+    # el PDF y el evento de historial van en una transacción. Si el PDF
+    # falla, regenerar_tras_correccion lanza ErrorGeneracionDeca y se
+    # deshace TODO, también el UPDATE -- antes los datos nuevos quedaban
+    # guardados con el PDF viejo, y pantalla y documento oficial no
+    # coincidían. El usuario ve el motivo en el aviso rojo del formulario.
+    with transaction.atomic():
+        # serializer.save() ejecuta el UPDATE (ya validado). A partir de aquí
+        # se compara "antes" (copiado arriba) con "después" para el historial.
+        expedicion = serializer.save()
+
+        # Qué campos cambiaron de verdad -- el historial mostraba solo
+        # "Editada" sin decir el qué (pedido explícito del usuario 2026-09-25).
+        cambiados = [
+            campo for campo in CAMPOS_AUDITABLES_EXPEDICION
+            if valores_antes[campo] != getattr(expedicion, campo)
+        ]
+        detalle = f'Campos modificados: {", ".join(cambiados)}.' if cambiados else ''
+
+        # Corrección de un DeCA ya generado, dentro del plazo de gracia (ver
+        # ExpedicionDecaSerializer.validate -> puede_editar_generado): el PDF
+        # ya entregado/enlazado por QR queda con datos viejos si no se
+        # regenera -- mismo token público, contenido corregido. NO se toca
+        # fecha_generacion (el plazo de corrección no se alarga al corregir).
+        if corrige_generado and cambiados:
+            ModificacionDeca.objects.create(
+                expedicion=expedicion, usuario=request.user, motivo=motivo,
+                cambios=[
+                    {'campo': c, 'antes': _texto_dato(valores_antes[c]), 'despues': _texto_dato(getattr(expedicion, c))}
+                    for c in cambiados
+                ],
+            )
+        # Si el aviso "Modificado en el ERP" estaba puesto, quien corrige ya
+        # lo ha visto: se quita (volverá si el ERP sigue sin coincidir).
+        if corrige_generado and cambiados and (expedicion.cambios_erp or expedicion.cambios_erp_descartados):
+            expedicion.cambios_erp, expedicion.cambios_erp_en, expedicion.cambios_erp_descartados = [], None, []
+            expedicion.save(update_fields=[
+                'cambios_erp', 'cambios_erp_en', 'cambios_erp_descartados', 'fecha_actualizacion',
+            ])
+        # Se regenera el PDF con el MISMO token/QR (la URL pública no cambia),
+        # para que quien escanee el QR del papel ya impreso vea los datos corregidos.
+        if estado_antes == ExpedicionDeca.Estado.GENERADO and expedicion.estado == ExpedicionDeca.Estado.GENERADO:
+            url_publica = request.build_absolute_uri(
+                reverse('deca-descarga-publica', args=[str(expedicion.token_publico)])
+            )
+            expedicion = generacion_service.regenerar_tras_correccion(expedicion, url_publica)
+            detalle = f'{detalle} Motivo: {motivo}. PDF regenerado tras corrección.'.strip()
+
+        auditoria_service.registrar_evento(
+            expedicion, EventoExpedicionDeca.TipoEvento.EDITADA, usuario=request.user, detalle=detalle,
+        )
+
+    # La Agenda va fuera: es una comodidad (guardar las fichas para no
+    # volver a teclearlas), no parte de la corrección.
+    catalogo_service.guardar_conductor_de(expedicion)
+    catalogo_service.guardar_transportista_de(expedicion)
+    catalogo_service.guardar_destinatario_de(expedicion)
+    catalogo_service.guardar_cargador_de(expedicion)
+    catalogo_service.guardar_tractora_de(expedicion)
+    catalogo_service.guardar_remolque_de(expedicion)
+    return expedicion
 
 
 # ─── Catálogos reutilizables (la "Agenda" del módulo) ──────────────────────
@@ -1254,6 +1269,36 @@ class DescartarCambiosErpDecaView(APIView):
                 expedicion, EventoExpedicionDeca.TipoEvento.CAMBIO_ERP, usuario=request.user,
                 detalle=f'Aviso descartado: el DeCA se deja como estaba ({resumen} en el ERP).',
             )
+        return Response(ExpedicionDecaSerializer(expedicion, context={'request': request}).data)
+
+
+class AplicarCambiosErpDecaView(APIView):
+    """"Sí, pasar los cambios del ERP al DeCA": corrige el DeCA con los datos
+    que mandó el ERP. Es una corrección como cualquier otra (guardar_edicion):
+    solo dentro del plazo, con el motivo en el propio DeCA (Resolución de
+    5-jun-2026, apartado quinto) y PDF regenerado con el mismo QR. El motivo
+    lo pone el sistema, para que baste con decir sí o no."""
+    permission_classes = DECA_PERMS
+
+    def post(self, request, expedicion_id):
+        expedicion = get_object_or_404(ExpedicionDeca, id=expedicion_id)
+        if not expedicion.cambios_erp:
+            raise ValidationError({'detail': 'Este DeCA no tiene cambios del ERP pendientes.'})
+        # Un aviso anotado antes de guardar `valor` (2026-10-14) solo tiene el
+        # texto legible: no se adivina el dato, se pide el siguiente envío.
+        if any('valor' not in d for d in expedicion.cambios_erp):
+            raise ValidationError({'detail': (
+                'Este aviso es anterior a poder aplicarlo desde aquí: corrige el DeCA a mano '
+                'o espera a que el ERP vuelva a mandar el envío.'
+            )})
+        datos = {d['campo']: d['valor'] for d in expedicion.cambios_erp}
+        serializer = ExpedicionDecaSerializer(expedicion, data=datos, partial=True, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        nombre = expedicion.clave_integracion.nombre if expedicion.clave_integracion_id else 'el ERP'
+        motivo = f'Cambios recibidos de {nombre}'
+        if expedicion.referencia_externa:
+            motivo += f' (referencia {expedicion.referencia_externa})'
+        expedicion = guardar_edicion(request, serializer, motivo + '.')
         return Response(ExpedicionDecaSerializer(expedicion, context={'request': request}).data)
 
 

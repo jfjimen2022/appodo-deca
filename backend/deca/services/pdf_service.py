@@ -251,7 +251,17 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
             ESTILO_VALOR,
         ),
     ]
-    bultos_texto = str(expedicion.bultos) if expedicion.bultos is not None else '—'
+    # Bultos igual que el peso (2026-10-14): palets y, a la derecha, cajas.
+    palets_texto = str(expedicion.bultos_palets) if expedicion.bultos_palets is not None else '—'
+    cajas_texto = str(expedicion.bultos) if expedicion.bultos is not None else '—'
+    fila_bultos = [
+        'Bultos palets',
+        Paragraph(
+            f'{_texto(palets_texto)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'
+            f'<font color="#6B7280"><b>Bultos cajas</b></font>&nbsp;&nbsp;{_texto(cajas_texto)}',
+            ESTILO_VALOR,
+        ),
+    ]
     # `fecha_hora_transporte` es null=True desde que el borrador puede nacer
     # vacío (ver ExpedicionDeca en models.py) -- la vista previa debe poder
     # pintarse sobre un borrador a medio rellenar sin reventar.
@@ -270,7 +280,7 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
         _fila('Fecha y hora del transporte', fecha_texto),
         _fila('Naturaleza de la mercancía', expedicion.naturaleza_mercancia),
         fila_peso,
-        _fila('Bultos', bultos_texto),
+        fila_bultos,
     ]
     # Plus sobre el mínimo legal -- solo se añaden a la tabla si tienen dato,
     # nunca como fila vacía con "—".
@@ -442,7 +452,7 @@ ETIQUETAS_CAMPO = {
     'sin_remolque': 'Sin remolque', 'autorizacion_especial': 'Autorización especial',
     'origen': 'Origen', 'destino': 'Destino', 'fecha_hora_transporte': 'Fecha y hora del transporte',
     'naturaleza_mercancia': 'Naturaleza de la mercancía', 'peso_kg': 'Peso neto (kg)', 'peso_bruto_kg': 'Peso bruto (kg)', 'peso_estimado': 'Peso estimado',
-    'bultos': 'Bultos', 'volumen_m3': 'Volumen (m³)', 'codigo_mercancia': 'Código de la mercancía',
+    'bultos': 'Bultos cajas', 'bultos_palets': 'Bultos palets', 'volumen_m3': 'Volumen (m³)', 'codigo_mercancia': 'Código de la mercancía',
     'numero_pedido': 'Nº de pedido', 'comentarios': 'Observaciones',
     'nombre_conductor': 'Conductor', 'nif_conductor': 'NIF del conductor',
     'telefono_conductor': 'Teléfono del conductor', 'email_conductor': 'Email del conductor',

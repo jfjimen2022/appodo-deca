@@ -67,6 +67,7 @@ export const decaService = {
   // Claves con las que el ERP de la empresa envía albaranes
   // para generar el DeCA solo. La clave completa solo viene al crearla.
   descartarCambiosErp: (id) => api.post(`/api/v1/deca/expediciones/${id}/descartar-cambios-erp/`),
+  aplicarCambiosErp: (id) => api.post(`/api/v1/deca/expediciones/${id}/aplicar-cambios-erp/`),
   listarClavesIntegracion: () => api.get('/api/v1/deca/integracion/claves/'),
   crearClaveIntegracion: (nombre) => api.post('/api/v1/deca/integracion/claves/', { nombre }),
   revocarClaveIntegracion: (id) => api.post(`/api/v1/deca/integracion/claves/${id}/revocar/`),

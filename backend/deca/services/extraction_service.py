@@ -87,7 +87,10 @@ PATRON_PESO = re.compile(rf'({_NUMERO_ES_CON_DECIMAL})[ \t]*(?:kg|kilos|kilogram
 # el neto PEGADOS, ver _numeros_es_de_linea.
 PATRON_LINEA_TOTAL = re.compile(r'^[ \t]*(?:suma|totales?)\b[^\n]*', re.IGNORECASE | re.MULTILINE)
 _PREFIJO_NUMERO_ES = re.compile(r'\d{1,3}(?:\.\d{3})*,\d{2}')
-PATRON_BULTOS = re.compile(r'(\d+)[ \t]*(?:bultos|bulto|palets?|cajas?)', re.IGNORECASE)
+# Bultos en dos campos, como el peso (2026-10-14): los palets por un lado y
+# las cajas (o "bultos" a secas) por otro, en `bultos`.
+PATRON_BULTOS = re.compile(r'(\d+)[ \t]*(?:bultos|bulto|cajas?)\b', re.IGNORECASE)
+PATRON_PALETS = re.compile(r'(\d+)[ \t]*(?:palets?|pallets?|pal[eé]s)\b', re.IGNORECASE)
 PATRON_FECHA = re.compile(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?:\s+\d{1,2}:\d{2})?')
 # Red de seguridad para cuando la IA (de visión o de texto) se salta el
 # conductor pese a estar impreso con claridad -- bug real 2026-09-25, un
@@ -285,6 +288,7 @@ def extraer_campos(texto: str, texto_maquetado: str = '') -> dict[str, str | Non
     matriculas_encontradas = _matriculas_del_texto(texto.upper())
 
     bultos_match = PATRON_BULTOS.search(texto)
+    palets_match = PATRON_PALETS.search(texto)
     fecha_match = PATRON_FECHA.search(texto)
     conductor_match = PATRON_CONDUCTOR.search(texto)
 
@@ -294,6 +298,7 @@ def extraer_campos(texto: str, texto_maquetado: str = '') -> dict[str, str | Non
         'peso_kg': _peso_total(texto_maquetado or texto),
         'peso_bruto_kg': _peso_bruto_total(texto_maquetado or texto),
         'bultos': bultos_match.group(1) if bultos_match else None,
+        'bultos_palets': palets_match.group(1) if palets_match else None,
         'fecha_hora_transporte': _normalizar_fecha_es(fecha_match.group(0)) if fecha_match else None,
         'nombre_conductor': conductor_match.group(1).strip() if conductor_match else None,
         'nif_conductor': conductor_match.group(2) if conductor_match else None,

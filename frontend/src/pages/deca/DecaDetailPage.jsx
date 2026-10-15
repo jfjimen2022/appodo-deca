@@ -177,6 +177,41 @@ export default function DecaDetailPage() {
     }
   }
 
+  // "Sí" del aviso del ERP. Tres casos (modoErp):
+  // - 'aplicar': en plazo -> el servidor corrige el DeCA con los datos del ERP
+  //   (motivo automático, PDF nuevo con el mismo QR).
+  // - 'anular': plazo vencido -> ya no se puede corregir; se abre Anular.
+  // - 'manual': aviso antiguo sin los datos del ERP guardados -> al formulario.
+  const [aplicandoErp, setAplicandoErp] = useState(false)
+  const modoErp = !expedicion?.puede_editar
+    ? 'anular'
+    : expedicion.cambios_erp?.every((c) => 'valor' in c) ? 'aplicar' : 'manual'
+  const responderSiErp = async () => {
+    if (modoErp === 'anular') {
+      setMotivoAnular(t('erp.motivo_anular', { referencia: expedicion.referencia_externa || '' }))
+      setModalAnularAbierto(true)
+      return
+    }
+    if (modoErp === 'manual') {
+      navigate(`/deca/nuevo?id=${id}`)
+      return
+    }
+    setAplicandoErp(true)
+    try {
+      const { data } = await decaService.aplicarCambiosErp(id)
+      setExpedicion(data)
+      toast.success(t('erp.aplicado_ok'))
+      const { data: eventosData } = await decaService.listarEventos(id)
+      setEventos(Array.isArray(eventosData) ? eventosData : (eventosData?.results ?? []))
+    } catch (err) {
+      const datos = err.response?.data
+      const motivo = datos?.detail || datos?.non_field_errors?.[0] || (Array.isArray(datos) ? datos[0] : null)
+      toast.error(motivo ? String(motivo) : t('erp.error_aplicar'))
+    } finally {
+      setAplicandoErp(false)
+    }
+  }
+
   const handleAnular = async () => {
     setAnulando(true)
     try {
@@ -257,7 +292,6 @@ export default function DecaDetailPage() {
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-700" aria-hidden="true" />
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-red-900">{t('erp.aviso_titulo')}</p>
-              <p className="mt-0.5">{t('erp.aviso_explicacion')}</p>
               <ul className="mt-2 space-y-1">
                 {expedicion.cambios_erp.map((c) => (
                   <li key={c.campo} className="break-words">
@@ -266,9 +300,16 @@ export default function DecaDetailPage() {
                   </li>
                 ))}
               </ul>
+              {/* Una pregunta de sí o no (pedido del usuario 2026-10-14). Lo que
+                  hace el "Sí" depende de si el DeCA aún se puede corregir. */}
+              <p className="mt-3 font-semibold text-gray-900">{t(`erp.pregunta_${modoErp}`)}</p>
+              <p className="mt-0.5 text-gray-700">{t(`erp.explica_si_${modoErp}`)} {t('erp.explica_no')}</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={descartarCambiosErp} disabled={descartandoErp} className="gap-1.5 min-h-[40px]">
-                  {descartandoErp && <Loader2 className="h-4 w-4 animate-spin" />}{t('erp.descartar')}
+                <Button size="sm" onClick={responderSiErp} disabled={aplicandoErp || descartandoErp} className="gap-1.5 min-h-[40px]">
+                  {aplicandoErp && <Loader2 className="h-4 w-4 animate-spin" />}{t(`erp.si_${modoErp}`)}
+                </Button>
+                <Button variant="outline" size="sm" onClick={descartarCambiosErp} disabled={aplicandoErp || descartandoErp} className="gap-1.5 min-h-[40px]">
+                  {descartandoErp && <Loader2 className="h-4 w-4 animate-spin" />}{t('erp.no')}
                 </Button>
               </div>
             </div>
@@ -356,6 +397,7 @@ export default function DecaDetailPage() {
               <Campo label={t('detalle.label_naturaleza')} value={expedicion.naturaleza_mercancia} />
               <Campo label={t('detalle.label_peso')} value={expedicion.peso_kg ? `${expedicion.peso_kg} kg${expedicion.peso_estimado ? ` (${t('campo.estimado')})` : ''}` : null} />
               <Campo label={t('detalle.label_peso_bruto')} value={expedicion.peso_bruto_kg ? `${expedicion.peso_bruto_kg} kg` : null} />
+              <Campo label={t('detalle.label_bultos_palets')} value={expedicion.bultos_palets} />
               <Campo label={t('detalle.label_bultos')} value={expedicion.bultos} />
               {expedicion.volumen_m3 != null && (
                 <Campo label={t('detalle.label_volumen')} value={`${expedicion.volumen_m3} m³`} />

@@ -6,6 +6,34 @@ SemVer del ERP Appodo — cada entrada que proviene de un resync de código
 anota además la versión y fecha de Appodo de origen (ver
 `docs/PLAN_EXTRACCION.md`, sección "Nombre y versión").
 
+## [Sin publicar]
+
+### Cambiado
+
+- **Bultos opcionales y en dos números, como el peso**: «Bultos palets» y
+  «Bultos cajas», en la misma línea del PDF. Ya no son obligatorios para
+  generar (la Orden FOM/2861/2012 art. 6.d solo pide el peso): un obligatorio
+  menos en el contador «X/N», también en móvil, donde van sin fondo amarillo.
+  `bultos` sigue siendo el campo de cajas; nuevo `bultos_palets` (migración
+  `0005`). El ERP puede mandar `bultos_palets` y `bultos_cajas`; la lectura
+  de documentos separa palets de cajas.
+- **Aviso «Modificado en el ERP» como pregunta de sí o no**: «Sí, pasar los
+  cambios al DeCA» lo corrige con los datos del ERP (motivo automático con la
+  referencia, PDF regenerado con el mismo QR); «No, el DeCA está bien» quita
+  el aviso. Nuevo endpoint `aplicar-cambios-erp/`.
+- **El aviso solo vive dentro del plazo de corrección**: fuera de plazo (o en
+  papel) un cambio del ERP ya no avisa, y un aviso sin contestar se cierra
+  solo al vencer el plazo, con constancia en el historial. Nuevo comando
+  `caducar_avisos_erp` en el servicio `scheduler`.
+
+### Corregido
+
+- Un aviso del ERP ya descartado no vuelve a salir al reenviarse el mismo envío.
+
+### Al actualizar
+
+- `python manage.py migrate` y reiniciar el servicio `scheduler`.
+
 ## [v03.1] — 2026-10-13
 
 ### Corregido

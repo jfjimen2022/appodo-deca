@@ -1123,7 +1123,14 @@ class ExtraccionRegexTests(TestCase):
     def test_bultos_en_la_misma_linea_si_se_extrae(self):
         texto = 'Mercancia paletizada: 14 palets en total'
         campos = extraction_service.extraer_campos(texto)
-        self.assertEqual(campos['bultos'], '14')
+        self.assertEqual(campos['bultos_palets'], '14')
+        self.assertIsNone(campos['bultos'])
+
+    def test_palets_y_cajas_van_cada_uno_a_su_campo(self):
+        """Bultos como el peso (2026-10-14): palets y cajas por separado."""
+        campos = extraction_service.extraer_campos('Carga: 32 palets\nTotal 872 cajas')
+        self.assertEqual(campos['bultos_palets'], '32')
+        self.assertEqual(campos['bultos'], '872')
 
     def test_conductor_con_etiqueta_literal_se_extrae(self):
         """Red de seguridad añadida tras un bug real 2026-09-25: un ticket
@@ -1726,8 +1733,10 @@ class ObligatoriosCamposDecaTests(APITestCase):
         self.assertIn('nif_destinatario', campos)
         self.assertIn('nombre_destinatario', campos)
         # Todos (destinatario incluido): desde 2026-09-30 también domicilio del
-        # cargador, remolque, peso y bultos (revisado contra el BOE).
-        self.assertEqual(len(campos), 15)
+        # cargador, remolque y peso (revisado contra el BOE); los bultos ya no
+        # (2026-10-14).
+        self.assertEqual(len(campos), 14)
+        self.assertNotIn('bultos', campos)
 
     def test_serializer_expone_campos_obligatorios(self):
         from .serializers import ConfiguracionDecaSerializer
@@ -1789,12 +1798,12 @@ class ObligatoriosCamposDecaTests(APITestCase):
 
 class ObligatoriosBoeDecaTests(DecaAPITestCase):
     """Obligatorios según la Orden FOM/2861/2012 art. 6 vigente (revisado
-    contra el BOE el 2026-09-30) + bultos por decisión del usuario."""
+    contra el BOE el 2026-09-30). Los bultos dejaron de serlo el 2026-10-14."""
 
     def test_obligatorios_segun_el_boe_domicilio_peso_bultos_y_remolque(self):
         """Orden FOM/2861/2012 art. 6 (vigente): domicilio del cargador (a),
         peso (d), tractora Y remolque en un conjunto articulado (g). Los
-        bultos, por decisión del usuario. Revisado el 2026-09-30."""
+        bultos NO: la norma no los pide (2026-10-14)."""
         datos = self._datos_expedicion_validos()
         for campo in ('domicilio_cargador', 'matricula_remolque', 'peso_kg', 'bultos'):
             datos.pop(campo, None)
@@ -1803,7 +1812,7 @@ class ObligatoriosBoeDecaTests(DecaAPITestCase):
         self.assertEqual(confirmar.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(
             sorted(confirmar.data['campos_faltantes']),
-            ['bultos', 'domicilio_cargador', 'matricula_remolque', 'peso_kg'],
+            ['domicilio_cargador', 'matricula_remolque', 'peso_kg'],
         )
 
     def test_camion_sin_remolque_no_exige_matricula_de_remolque(self):

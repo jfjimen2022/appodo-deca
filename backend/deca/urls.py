@@ -125,6 +125,11 @@ urlpatterns = [
         name='deca-expedicion-descartar-cambios-erp',
     ),
     path(
+        'deca/expediciones/<uuid:expedicion_id>/aplicar-cambios-erp/',
+        views.AplicarCambiosErpDecaView.as_view(),
+        name='deca-expedicion-aplicar-cambios-erp',
+    ),
+    path(
         'deca/expediciones/<uuid:expedicion_id>/enviar-email/',
         views.EnviarEmailExpedicionDecaView.as_view(),
         name='deca-expedicion-enviar-email',

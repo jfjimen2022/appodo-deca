@@ -129,7 +129,7 @@ def _comparable(campo: str, valor) -> str:
     texto = str(valor).strip().upper()
     if campo == 'fecha_hora_transporte':
         return re.sub(r'[^0-9]', '', texto)[:12]  # AAAAMMDDHHMM
-    if campo in ('peso_kg', 'peso_bruto_kg', 'bultos'):
+    if campo in ('peso_kg', 'peso_bruto_kg', 'bultos', 'bultos_palets'):
         try:
             return f'{float(texto.replace(",", ".")):.2f}'
         except ValueError:
@@ -338,7 +338,7 @@ def pistas_candidatos(empresa) -> str:
 # IA solo la empujaría a repetirlo (aclarado por el usuario 2026-09-28). Se
 # siguen midiendo en la precisión de lectura, pero no se enseñan.
 _CAMPOS_VARIABLES = frozenset({
-    'fecha_hora_transporte', 'peso_kg', 'peso_bruto_kg', 'bultos', 'volumen_m3', 'numero_albaran', 'numero_cmr',
+    'fecha_hora_transporte', 'peso_kg', 'peso_bruto_kg', 'bultos', 'bultos_palets', 'volumen_m3', 'numero_albaran', 'numero_cmr',
     'numero_pedido', 'comentarios',
 })
 MAXIMO_EJEMPLOS_CORRECCION = 8

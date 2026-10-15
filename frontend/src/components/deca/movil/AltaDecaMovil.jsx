@@ -33,9 +33,11 @@ const BLOQUES = [
   { id: 'transportista', icono: Truck, campos: ['nombre_transportista', 'nif_transportista'] },
   { id: 'destinatario', icono: Users, campos: ['nombre_destinatario', 'nif_destinatario'] },
   // Tractora y remolque juntos (art. 6.g: en un conjunto articulado se
-  // piden las dos matrículas); peso y bultos con la mercancía.
+  // piden las dos matrículas); peso y bultos con la mercancía. Lo opcional de
+  // un bloque (peso bruto, bultos palets/cajas) sale en su hoja en blanco, sin
+  // el amarillo de obligatorio, y no cuenta en el "X/N".
   { id: 'transporte', icono: Route, campos: ['matricula_tractor', 'matricula_remolque', 'origen', 'destino', 'fecha_hora_transporte'] },
-  { id: 'mercancia', icono: Package, campos: ['naturaleza_mercancia', 'peso_kg', 'peso_bruto_kg', 'bultos'] },
+  { id: 'mercancia', icono: Package, campos: ['naturaleza_mercancia', 'peso_kg', 'peso_bruto_kg', 'bultos_palets', 'bultos'] },
 ]
 
 // Cómo se pinta y se escribe cada campo. `agenda` = qué catálogo sugiere
@@ -63,6 +65,7 @@ const CAMPOS = {
   numero_pedido: { mono: true },
   peso_kg: { mono: true, inputMode: 'decimal' },
   peso_bruto_kg: { mono: true, inputMode: 'decimal' },
+  bultos_palets: { mono: true, inputMode: 'numeric' },
   bultos: { mono: true, inputMode: 'numeric' },
   volumen_m3: { mono: true, inputMode: 'decimal' },
   codigo_mercancia: { mono: true },
@@ -87,7 +90,7 @@ const GRUPOS_OPCIONALES = [
   // El remolque ya no es opcional: va con la tractora (o se marca "sin remolque").
   { id: 'vehiculo', campos: ['numero_pedido', 'autorizacion_especial'] },
   { id: 'destinatario', campos: ['nombre_destinatario', 'nif_destinatario'] },
-  { id: 'carga', campos: ['volumen_m3', 'codigo_mercancia'] },
+  { id: 'carga', campos: ['peso_bruto_kg', 'bultos_palets', 'bultos', 'volumen_m3', 'codigo_mercancia'] },
   { id: 'conductor', campos: ['nombre_conductor', 'nif_conductor', 'telefono_conductor', 'email_conductor'] },
   { id: 'documento', campos: ['numero_albaran', 'numero_cmr'] },
   { id: 'instrucciones', campos: ['instrucciones_conductor', 'contacto_emergencias', 'tipo_contenedor', 'instrucciones_expedidor', 'instrucciones_pago', 'comentarios'] },
@@ -778,8 +781,10 @@ export default function AltaDecaMovil({
       <>
         <h2 className="text-[23px] font-bold text-[#111]">{t('movil.comprueba_y_genera')}</h2>
         {BLOQUES.map((b) => {
-          const campos = b.campos.filter((c) => obligatorios.includes(c))
-          if (!campos.length) return null
+          // Un bloque sale si tiene algún obligatorio; con él, lo opcional
+          // que ya tenga dato (los bultos, p. ej.), para comprobarlo todo junto.
+          if (!b.campos.some((c) => obligatorios.includes(c))) return null
+          const campos = b.campos.filter((c) => obligatorios.includes(c) || !vacio(form[c]))
           const Icono = b.icono
           return (
             <div key={b.id} className="flex flex-col gap-2 rounded-2xl border-2 border-[#111] bg-white p-3.5">
@@ -793,7 +798,7 @@ export default function AltaDecaMovil({
                 <div key={c}>
                   <span className="flex items-center gap-2 text-[15px] font-bold text-[#3B333A]">
                     {t(`movil.campo_${c}`)}
-                    {estadoDe(c) !== 'ok' && <Pastilla estado={estadoDe(c)} t={t} />}
+                    {obligatorios.includes(c) && estadoDe(c) !== 'ok' && <Pastilla estado={estadoDe(c)} t={t} />}
                   </span>
                   <strong className={`block break-words text-[19px] text-[#111] ${CAMPOS[c]?.mono ? 'font-mono' : ''}`}>
                     {CAMPOS[c]?.tipo === 'datetime-local' ? fechaLegible(form[c]) : (form[c] || '—')}
@@ -852,7 +857,7 @@ export default function AltaDecaMovil({
     const b = BLOQUES.find((x) => x.id === hoja.id)
     hojaUI = (
       <Hoja titulo={t(`movil.bloque_${b.id}`)} onCerrar={cerrar} t={t} pie={<Boton alto="xl" onClick={cerrar}>{t('movil.listo')}</Boton>}>
-        {b.campos.filter((c) => obligatorios.includes(c)).map((c) => campo(c))}
+        {b.campos.map((c) => campo(c, obligatorios.includes(c)))}
       </Hoja>
     )
   } else if (hoja?.tipo === 'mas') {

@@ -46,13 +46,13 @@ const TIPOS_DOCUMENTO = ['albaran_venta', 'cmr', 'otro']
 // `configuracion.campos_obligatorios` (deca/services/obligatorios_service.py),
 // según `exigir_datos_destinatario` -- nunca se decide aquí por separado.
 // Orden FOM/2861/2012 art. 6 vigente (revisado con el BOE 2026-09-30):
-// también domicilio del cargador, remolque (salvo camión rígido) y peso; los
-// bultos, por decisión del usuario.
+// también domicilio del cargador, remolque (salvo camión rígido) y peso. Los
+// bultos (palets y cajas) ya no son obligatorios (2026-10-14): la norma no los pide.
 const CAMPOS_OBLIGATORIOS_DEFECTO = [
   'nif_cargador', 'nombre_cargador', 'domicilio_cargador',
   'nif_transportista', 'nombre_transportista',
   'matricula_tractor', 'matricula_remolque', 'origen', 'destino',
-  'fecha_hora_transporte', 'naturaleza_mercancia', 'peso_kg', 'bultos',
+  'fecha_hora_transporte', 'naturaleza_mercancia', 'peso_kg',
 ]
 
 // Mismo CAMPOS_OBLIGATORIOS repartido por sección -- alimenta el contador
@@ -63,7 +63,7 @@ const CAMPOS_OBLIGATORIOS_POR_SECCION = {
   transportista: ['nif_transportista', 'nombre_transportista'],
   destinatario: ['nif_destinatario', 'nombre_destinatario'],
   transporte: ['matricula_tractor', 'matricula_remolque', 'origen', 'destino', 'fecha_hora_transporte'],
-  mercancia: ['naturaleza_mercancia', 'peso_kg', 'bultos'],
+  mercancia: ['naturaleza_mercancia', 'peso_kg'],
 }
 
 function contarCompletos(campos, form) {
@@ -80,7 +80,7 @@ const FORM_VACIO = {
   matricula_tractor: '', matricula_remolque: '', sin_remolque: false, autorizacion_especial: '',
   origen: '', destino: '',
   fecha_hora_transporte: '',
-  naturaleza_mercancia: '', peso_kg: '', peso_bruto_kg: '', peso_estimado: false, bultos: '', volumen_m3: '', codigo_mercancia: '',
+  naturaleza_mercancia: '', peso_kg: '', peso_bruto_kg: '', peso_estimado: false, bultos: '', bultos_palets: '', volumen_m3: '', codigo_mercancia: '',
   nombre_conductor: '', nif_conductor: '', telefono_conductor: '', email_conductor: '',
   numero_pedido: '', instrucciones_conductor: '', contacto_emergencias: '', tipo_contenedor: '',
   instrucciones_expedidor: '', instrucciones_pago: '', comentarios: '',
@@ -125,7 +125,7 @@ function expedicionAForm(exp) {
     origen: exp.origen ?? '', destino: exp.destino ?? '',
     fecha_hora_transporte: isoADatetimeLocal(exp.fecha_hora_transporte),
     naturaleza_mercancia: exp.naturaleza_mercancia ?? '',
-    peso_kg: exp.peso_kg ?? '', peso_bruto_kg: exp.peso_bruto_kg ?? '', peso_estimado: Boolean(exp.peso_estimado), bultos: exp.bultos ?? '',
+    peso_kg: exp.peso_kg ?? '', peso_bruto_kg: exp.peso_bruto_kg ?? '', peso_estimado: Boolean(exp.peso_estimado), bultos: exp.bultos ?? '', bultos_palets: exp.bultos_palets ?? '',
     volumen_m3: exp.volumen_m3 ?? '', codigo_mercancia: exp.codigo_mercancia ?? '',
     nombre_conductor: exp.nombre_conductor ?? '', nif_conductor: exp.nif_conductor ?? '',
     telefono_conductor: exp.telefono_conductor ?? '', email_conductor: exp.email_conductor ?? '',
@@ -546,6 +546,7 @@ export default function DecaFormPage() {
     // Solo se manda si la empresa trabaja con DeCA anticipado (el servidor lo rechaza si no).
     ...(opcionesCampo.anticipado || form.peso_estimado ? { peso_estimado: Boolean(form.peso_estimado) } : {}),
     bultos: form.bultos === '' ? null : parseInt(form.bultos, 10),
+    bultos_palets: form.bultos_palets === '' ? null : parseInt(form.bultos_palets, 10),
     volumen_m3: form.volumen_m3 === '' ? null : form.volumen_m3,
     codigo_mercancia: form.codigo_mercancia.trim(),
     nombre_conductor: form.nombre_conductor.trim(),
@@ -842,6 +843,7 @@ export default function DecaFormPage() {
     if (nuevas.peso_kg != null) acc.peso_kg = nuevas.peso_kg
     if (nuevas.peso_bruto_kg != null) acc.peso_bruto_kg = nuevas.peso_bruto_kg
     if (nuevas.bultos != null) acc.bultos = nuevas.bultos
+    if (nuevas.bultos_palets != null) acc.bultos_palets = nuevas.bultos_palets
     if (nuevas.fecha_hora_transporte) acc.fecha_hora_transporte = nuevas.fecha_hora_transporte
     return acc
   }
@@ -875,6 +877,7 @@ export default function DecaFormPage() {
       if (!siguiente.peso_kg && nuevas.peso_kg != null) siguiente.peso_kg = String(nuevas.peso_kg)
       if (!siguiente.peso_bruto_kg && nuevas.peso_bruto_kg != null) siguiente.peso_bruto_kg = String(nuevas.peso_bruto_kg)
       if (!siguiente.bultos && nuevas.bultos != null) siguiente.bultos = String(nuevas.bultos)
+      if (!siguiente.bultos_palets && nuevas.bultos_palets != null) siguiente.bultos_palets = String(nuevas.bultos_palets)
       if (!siguiente.fecha_hora_transporte && nuevas.fecha_hora_transporte) {
         const convertida = isoADatetimeLocal(nuevas.fecha_hora_transporte)
         if (convertida) siguiente.fecha_hora_transporte = convertida
@@ -999,7 +1002,7 @@ export default function DecaFormPage() {
     }
 
     setSubiendoDoc(true)
-    const acumuladas = { nifs_encontrados: [], matriculas_encontradas: [], peso_kg: null, peso_bruto_kg: null, bultos: null, fecha_hora_transporte: null, nombre_conductor: null, nif_conductor: null }
+    const acumuladas = { nifs_encontrados: [], matriculas_encontradas: [], peso_kg: null, peso_bruto_kg: null, bultos: null, bultos_palets: null, fecha_hora_transporte: null, nombre_conductor: null, nif_conductor: null }
     let nifsAgendaAcum = {}
     const avisosAgendaAcum = []
     const camposAgendaAcum = []
@@ -1079,7 +1082,7 @@ export default function DecaFormPage() {
     }
 
     const huboRegex = acumuladas.nifs_encontrados.length || acumuladas.matriculas_encontradas.length
-      || acumuladas.peso_kg || acumuladas.peso_bruto_kg || acumuladas.bultos || acumuladas.fecha_hora_transporte
+      || acumuladas.peso_kg || acumuladas.peso_bruto_kg || acumuladas.bultos || acumuladas.bultos_palets || acumuladas.fecha_hora_transporte
       || acumuladas.nombre_conductor || acumuladas.nif_conductor
     if (huboRegex) {
       setSugerencias(acumuladas)
@@ -1178,7 +1181,7 @@ export default function DecaFormPage() {
       const huboRegex = data.campos_sugeridos && (
         data.campos_sugeridos.nifs_encontrados?.length || data.campos_sugeridos.matriculas_encontradas?.length
         || data.campos_sugeridos.peso_kg != null || data.campos_sugeridos.peso_bruto_kg != null
-        || data.campos_sugeridos.bultos != null
+        || data.campos_sugeridos.bultos != null || data.campos_sugeridos.bultos_palets != null
         || data.campos_sugeridos.fecha_hora_transporte
         || data.campos_sugeridos.nombre_conductor || data.campos_sugeridos.nif_conductor
       )
@@ -1582,7 +1585,7 @@ export default function DecaFormPage() {
     nif_destinatario: 'destinatario', nombre_destinatario: 'destinatario',
     matricula_tractor: 'transporte', matricula_remolque: 'transporte', origen: 'transporte',
     destino: 'transporte', fecha_hora_transporte: 'transporte',
-    naturaleza_mercancia: 'mercancia', peso_kg: 'mercancia', peso_bruto_kg: 'mercancia', bultos: 'mercancia',
+    naturaleza_mercancia: 'mercancia', peso_kg: 'mercancia', peso_bruto_kg: 'mercancia', bultos: 'mercancia', bultos_palets: 'mercancia',
     nombre_conductor: 'conductor', nif_conductor: 'conductor',
   }
   const primerCampoConError = Object.keys(SECCION_DE_CAMPO).find((c) => fieldErrors[c])
@@ -1926,6 +1929,9 @@ export default function DecaFormPage() {
                   {sugerencias.peso_bruto_kg != null && (
                     <span className="text-sm bg-white border border-gray-200 rounded px-2 py-1">{t('expedicion.label_peso_bruto')}: <strong>{sugerencias.peso_bruto_kg}</strong></span>
                   )}
+                  {sugerencias.bultos_palets != null && (
+                    <span className="text-sm bg-white border border-gray-200 rounded px-2 py-1">{t('expedicion.label_bultos_palets')}: <strong>{sugerencias.bultos_palets}</strong></span>
+                  )}
                   {sugerencias.bultos != null && (
                     <span className="text-sm bg-white border border-gray-200 rounded px-2 py-1">{t('expedicion.label_bultos')}: <strong>{sugerencias.bultos}</strong></span>
                   )}
@@ -2246,9 +2252,15 @@ export default function DecaFormPage() {
               </div>
               {errorCampo('peso_bruto_kg')}
             </div>
+            {/* Bultos como el peso (2026-10-14): palets y cajas, los dos opcionales. */}
             <div className="space-y-1.5">
-              <Label htmlFor="campo-bultos">{t('expedicion.label_bultos')}{marcaObligatorio('bultos')}</Label>
-              <Input id="campo-bultos" aria-describedby={fieldErrors.bultos ? 'error-bultos' : undefined} className={claseCampo('bultos')} type="number" min="0" step="1" value={form.bultos} onChange={(e) => set('bultos')(e.target.value)} placeholder={t('expedicion.placeholder_bultos')} disabled={readOnly} aria-required={esObligatorio('bultos')} />
+              <Label htmlFor="campo-bultos_palets">{t('expedicion.label_bultos_palets')}</Label>
+              <Input id="campo-bultos_palets" aria-describedby={fieldErrors.bultos_palets ? 'error-bultos_palets' : undefined} className={claseCampo('bultos_palets')} type="number" min="0" step="1" value={form.bultos_palets} onChange={(e) => set('bultos_palets')(e.target.value)} placeholder={t('expedicion.placeholder_bultos_palets')} disabled={readOnly} />
+              {errorCampo('bultos_palets')}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="campo-bultos">{t('expedicion.label_bultos')}</Label>
+              <Input id="campo-bultos" aria-describedby={fieldErrors.bultos ? 'error-bultos' : undefined} className={claseCampo('bultos')} type="number" min="0" step="1" value={form.bultos} onChange={(e) => set('bultos')(e.target.value)} placeholder={t('expedicion.placeholder_bultos')} disabled={readOnly} />
               {errorCampo('bultos')}
             </div>
             <div className="space-y-1.5">

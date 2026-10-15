@@ -3,12 +3,15 @@
 Se prueba haciendo las peticiones reales, con la clave en la cabecera, igual
 que lo hará el conector instalado en la red del cliente."""
 
+import io
+
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from .models import (
-    ClaveIntegracionDeca, EmpresaTransportistaDeca, EventoExpedicionDeca, ExpedicionDeca,
+    ClaveIntegracionDeca, ConfiguracionDeca, EmpresaTransportistaDeca, EventoExpedicionDeca, ExpedicionDeca,
+    ModificacionDeca,
 )
 from .services import integracion_service
 
@@ -260,7 +263,7 @@ class IngestaIntegracionDecaTests(APITestCase):
 
         respuesta = self.cliente.post(URL_INGESTA, _envio(matricula_tractor='9999XYZ'), format='json')
         self.assertEqual(respuesta.data['cambios_erp'], [
-            {'campo': 'matricula_tractor', 'en_deca': '1234KLM', 'en_erp': '9999XYZ'},
+            {'campo': 'matricula_tractor', 'en_deca': '1234KLM', 'en_erp': '9999XYZ', 'valor': '9999XYZ'},
         ])
         expedicion = ExpedicionDeca.objects.get()
         self.assertEqual(expedicion.matricula_tractor, '1234KLM')
@@ -298,6 +301,123 @@ class IngestaIntegracionDecaTests(APITestCase):
         self.assertEqual(ExpedicionDeca.objects.get().cambios_erp, [])
         self.cliente.post(URL_INGESTA, _envio(bultos=1400), format='json')
         self.assertEqual(ExpedicionDeca.objects.get().cambios_erp[0]['en_erp'], '1400')
+
+    def _usuario_app(self):
+        admin = User.objects.create_user(username='b@fabrica.test', email='b@fabrica.test', password='x', is_staff=True)
+        app = APIClient()
+        app.force_authenticate(user=admin)
+        return app
+
+    def test_si_pasar_los_cambios_del_erp_corrige_el_deca(self):
+        """"Sí" del aviso: corrige con los datos del ERP como una corrección
+        normal (motivo automático, mismo QR, ModificacionDeca) y quita el aviso."""
+        app = self._usuario_app()
+        self.cliente.post(URL_INGESTA, _envio(), format='json')
+        token = ExpedicionDeca.objects.get().token_publico
+        self.cliente.post(URL_INGESTA, _envio(matricula_tractor='9999XYZ', bultos=32), format='json')
+        expedicion = ExpedicionDeca.objects.get()
+
+        respuesta = app.post(f'/api/v1/deca/expediciones/{expedicion.id}/aplicar-cambios-erp/')
+        self.assertEqual(respuesta.status_code, status.HTTP_200_OK, respuesta.data)
+        self.assertEqual(respuesta.data['cambios_erp'], [])
+        expedicion.refresh_from_db()
+        self.assertEqual(expedicion.matricula_tractor, '9999XYZ')
+        self.assertEqual(expedicion.bultos, 32)
+        self.assertEqual(expedicion.token_publico, token)
+        modificacion = ModificacionDeca.objects.get(expedicion=expedicion)
+        self.assertIn('ALB-2026/4512', modificacion.motivo)
+        self.assertEqual({c['campo'] for c in modificacion.cambios}, {'matricula_tractor', 'bultos'})
+
+        # El ERP sigue mandando lo mismo, que ya coincide: sin aviso.
+        self.cliente.post(URL_INGESTA, _envio(matricula_tractor='9999XYZ', bultos=32), format='json')
+        self.assertEqual(ExpedicionDeca.objects.get().cambios_erp, [])
+
+    def test_si_pasar_los_cambios_fuera_de_plazo_no_toca_el_deca(self):
+        """Si el plazo vence con la ficha abierta, el "Sí" ya no corrige."""
+        app = self._usuario_app()
+        self.cliente.post(URL_INGESTA, _envio(), format='json')
+        self.cliente.post(URL_INGESTA, _envio(matricula_tractor='9999XYZ'), format='json')
+        ConfiguracionDeca.objects.update_or_create(pk=1, defaults={'horas_max_edicion_generado': 0})
+        expedicion = ExpedicionDeca.objects.get()
+
+        respuesta = app.post(f'/api/v1/deca/expediciones/{expedicion.id}/aplicar-cambios-erp/')
+        self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+        expedicion.refresh_from_db()
+        self.assertEqual(expedicion.matricula_tractor, '1234KLM')
+
+    def test_aviso_sin_contestar_desaparece_al_vencer_el_plazo(self):
+        """Al abrir el listado o la ficha (y en el comando programado), un
+        aviso cuyo plazo venció se cierra solo y queda en el historial."""
+        from django.core.management import call_command
+
+        app = self._usuario_app()
+        self.cliente.post(URL_INGESTA, _envio(), format='json')
+        self.cliente.post(URL_INGESTA, _envio(matricula_tractor='9999XYZ'), format='json')
+        expedicion = ExpedicionDeca.objects.get()
+        listado = app.get('/api/v1/deca/expediciones/?modificado_erp=true')
+        self.assertEqual(listado.data['count'] if isinstance(listado.data, dict) else len(listado.data), 1)
+
+        ConfiguracionDeca.objects.update_or_create(pk=1, defaults={'horas_max_edicion_generado': 0})
+        ficha = app.get(f'/api/v1/deca/expediciones/{expedicion.id}/')
+        self.assertEqual(ficha.data['cambios_erp'], [])
+        listado = app.get('/api/v1/deca/expediciones/?modificado_erp=true')
+        self.assertEqual(listado.data['count'] if isinstance(listado.data, dict) else len(listado.data), 0)
+        self.assertTrue(expedicion.eventos.filter(tipo_evento='cambio_erp', detalle__startswith='Aviso del ERP cerrado').exists())
+        self.assertEqual(expedicion.matricula_tractor, '1234KLM')
+
+        # El comando programado hace lo mismo (aquí ya no queda ninguno).
+        salida = io.StringIO()
+        call_command('caducar_avisos_erp', stdout=salida)
+        self.assertIn('0 aviso', salida.getvalue())
+
+    def test_cambio_en_el_erp_fuera_de_plazo_no_avisa(self):
+        """Pasado el plazo de corrección el DeCA ya no va a cambiar: sin aviso."""
+        self.cliente.post(URL_INGESTA, _envio(), format='json')
+        ConfiguracionDeca.objects.update_or_create(pk=1, defaults={'horas_max_edicion_generado': 0})
+        respuesta = self.cliente.post(URL_INGESTA, _envio(matricula_tractor='9999XYZ'), format='json')
+        self.assertEqual(respuesta.data['cambios_erp'], [])
+        expedicion = ExpedicionDeca.objects.get()
+        self.assertEqual(expedicion.cambios_erp, [])
+        self.assertFalse(expedicion.eventos.filter(tipo_evento='cambio_erp').exists())
+
+    def test_aviso_antiguo_sin_valor_no_se_aplica(self):
+        app = self._usuario_app()
+        self.cliente.post(URL_INGESTA, _envio(), format='json')
+        expedicion = ExpedicionDeca.objects.get()
+        expedicion.cambios_erp = [{'campo': 'matricula_tractor', 'en_deca': '1234KLM', 'en_erp': '9999XYZ'}]
+        expedicion.save(update_fields=['cambios_erp'])
+        respuesta = app.post(f'/api/v1/deca/expediciones/{expedicion.id}/aplicar-cambios-erp/')
+        self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(ExpedicionDeca.objects.get().matricula_tractor, '1234KLM')
+
+    def test_aviso_antiguo_se_completa_con_valor_y_el_descartado_no_vuelve(self):
+        """Avisos anotados antes de guardar `valor`: el reenvío del ERP lo
+        completa sin evento nuevo, y uno ya descartado no reaparece."""
+        self.cliente.post(URL_INGESTA, _envio(), format='json')
+        expedicion = ExpedicionDeca.objects.get()
+        antiguo = [{'campo': 'matricula_tractor', 'en_deca': '1234KLM', 'en_erp': '9999XYZ'}]
+        expedicion.cambios_erp = antiguo
+        expedicion.save(update_fields=['cambios_erp'])
+        eventos = expedicion.eventos.count()
+        self.cliente.post(URL_INGESTA, _envio(matricula_tractor='9999XYZ'), format='json')
+        expedicion.refresh_from_db()
+        self.assertEqual(expedicion.cambios_erp[0]['valor'], '9999XYZ')
+        self.assertEqual(expedicion.eventos.count(), eventos)
+
+        expedicion.cambios_erp, expedicion.cambios_erp_descartados = [], antiguo
+        expedicion.save(update_fields=['cambios_erp', 'cambios_erp_descartados'])
+        self.cliente.post(URL_INGESTA, _envio(matricula_tractor='9999XYZ'), format='json')
+        self.assertEqual(ExpedicionDeca.objects.get().cambios_erp, [])
+
+    def test_bultos_palets_y_cajas_desde_el_erp(self):
+        """`bultos_cajas` es el nombre claro para el ERP (va a `bultos`);
+        `bultos_palets` entra tal cual."""
+        envio = _envio(bultos_cajas=872, bultos_palets=32)
+        envio.pop('bultos')
+        self.cliente.post(URL_INGESTA, envio, format='json')
+        expedicion = ExpedicionDeca.objects.get()
+        self.assertEqual(expedicion.bultos, 872)
+        self.assertEqual(expedicion.bultos_palets, 32)
 
     def test_borrador_se_actualiza_sin_aviso(self):
         self.cliente.post(URL_INGESTA, _envio(matricula_tractor=''), format='json')

@@ -60,7 +60,7 @@ CAMPOS_DECA_IA = (
     'matricula_tractor', 'matricula_remolque',
     'nombre_conductor', 'nif_conductor',
     'origen', 'destino', 'fecha_hora_transporte',
-    'naturaleza_mercancia', 'peso_kg', 'peso_bruto_kg', 'bultos', 'comentarios',
+    'naturaleza_mercancia', 'peso_kg', 'peso_bruto_kg', 'bultos', 'bultos_palets', 'comentarios',
 )
 
 # La carta de porte CMR es un formulario INTERNACIONAL con casillas
@@ -74,7 +74,7 @@ Si el documento es una carta de porte CMR (formulario internacional con casillas
 - Casilla 2 (consignatario / destinataire / consignee) -> nombre_destinatario y nif_destinatario.
 - Casilla 3 (lugar de entrega / lieu prévu pour la livraison / place of delivery) -> destino. Es un SITIO (almacén, plataforma, polígono), aunque lleve nombre de empresa (p. ej. "PG 12, FRIGORÍFICOS DEL SUR"): NUNCA es el transportista.
 - Casilla 4 (lugar y fecha de carga) -> origen y fecha_hora_transporte.
-- Casillas 6 a 9 (marcas, número de bultos, clase de embalaje, naturaleza de la mercancía) -> bultos (el total) y naturaleza_mercancia.
+- Casillas 6 a 9 (marcas, número de bultos, clase de embalaje, naturaleza de la mercancía) -> bultos (total de cajas/bultos), bultos_palets (si la clase de embalaje son palets) y naturaleza_mercancia.
 - Casilla 11 es el peso BRUTO -> peso_bruto_kg. Algunos modelos traen al lado una casilla de peso NETO -> peso_kg. Usa la fila de total si la hay, nunca la de una sola línea de producto.
 - Casillas 13 (instrucciones del remitente) y 18 (reservas y observaciones del porteador) -> comentarios, solo si traen algo propio de este envío (no el texto legal impreso en todos los CMR).
 - Casilla 16 (porteador / transporteur / carrier: "Porteador (nombre, domicilio, país)") -> nombre_transportista, nif_transportista y, si aparece ahí, la matrícula. El transportista sale SOLO de esta casilla (o de la firma de la 23 "firma y sello del transportista" si la 16 está vacía); nunca de la 3, la 1 ni la 2. En el texto extraído las casillas pueden venir desordenadas: guíate por la etiqueta de cada casilla y su posición, no por lo que aparezca justo después.
@@ -104,7 +104,8 @@ _CAMPOS_PEDIDOS = """Extrae los siguientes campos y devuélvelos ESTRICTAMENTE e
 - naturaleza_mercancia: QUÉ mercancía es, con su denominación corriente en palabras normales, como se entendería sin conocer la empresa (ej. "Aguacate Hass en cajas de 4 kg"). Si son varios productos, una lista breve o un grupo claro (ej. "Fruta fresca: aguacate y mango"). NO copies códigos de artículo, referencias internas, números de lote ni abreviaturas de sistema (de "ART00341 AGUAC.HASS CAL18 4KG" escribe "Aguacate Hass en cajas de 4 kg"). Si es mercancía peligrosa (ADR), su denominación oficial y su número ONU.
 - peso_kg: peso NETO total de la mercancía en kilogramos, como número (sin separador de miles, punto decimal si hace falta -- ejemplo: 116969.00, no "116.969,00"). null si el documento solo trae el bruto: NO pongas aquí el bruto.
 - peso_bruto_kg: peso BRUTO total (con envases y palets) en kilogramos, mismo formato que peso_kg. null si no aparece.
-- bultos: número total de bultos/palets/cajas, como número entero.
+- bultos: número total de CAJAS (o de bultos, si no dice de qué tipo), como número entero. NO pongas aquí los palets.
+- bultos_palets: número total de PALETS, como número entero. null si no aparece.
 - comentarios: observaciones, notas anexas o reservas escritas a mano o impresas en el documento que no encajen en ningún otro campo (ej. casillas "Observaciones", "Notas anexas", "Reservas del porteador" de un CMR). null si no hay ninguna.
 - campos_dudosos: lista con las claves de los campos anteriores cuyo valor has leído de texto ESCRITO A MANO, tachado, borroso o parcialmente ilegible y que por tanto no es seguro (ej. ["nombre_conductor", "nif_conductor"]). Lista vacía [] si todo lo que devuelves se lee con claridad.
 """ + _GUIA_CMR + """

@@ -35,6 +35,7 @@ from rest_framework.views import APIView
 from .models import ClaveIntegracionDeca, EventoExpedicionDeca, ExpedicionDeca, ReferenciaErpDescartada
 from .serializers import ClaveIntegracionDecaSerializer, ExpedicionDecaSerializer
 from .services import auditoria_service, catalogo_service, generacion_service, integracion_service, obligatorios_service
+from .services.storage_service import puede_editar_generado
 from .views import CAMPOS_AUDITABLES_EXPEDICION, _texto_dato, _url_publica
 
 logger = logging.getLogger(__name__)
@@ -113,15 +114,37 @@ def _anotar_cambios_erp(request, expedicion: ExpedicionDeca, datos: dict, clave)
     # y poder comparar valor a valor con lo que ya tiene el DeCA.
     serializer = ExpedicionDecaSerializer(data=datos, context={'request': request})
     serializer.is_valid(raise_exception=True)
+    # `valor` es el dato del ERP tal como lo acepta la API: con él, "Sí,
+    # pasar los cambios al DeCA" (AplicarCambiosErpDecaView) lo aplica sin
+    # tener que interpretar el texto legible de `en_erp`.
     diferencias = [
-        {'campo': campo, 'en_deca': _texto_dato(getattr(expedicion, campo)), 'en_erp': _texto_dato(valor)}
+        {
+            'campo': campo, 'en_deca': _texto_dato(getattr(expedicion, campo)), 'en_erp': _texto_dato(valor),
+            'valor': serializer.fields[campo].to_representation(valor),
+        }
         for campo, valor in serializer.validated_data.items()
         if campo in CAMPOS_AUDITABLES_EXPEDICION and valor not in (None, '') and getattr(expedicion, campo) != valor
     ]
-    if diferencias == expedicion.cambios_erp:
+    # Se compara sin `valor`: los avisos anotados antes del 2026-10-14 no lo
+    # tienen, y uno ya descartado no debe volver solo por eso.
+    def _sin_valor(lista):
+        return [{k: d.get(k) for k in ('campo', 'en_deca', 'en_erp')} for d in lista]
+
+    if _sin_valor(diferencias) == _sin_valor(expedicion.cambios_erp):
+        if diferencias != expedicion.cambios_erp:
+            # Mismo aviso, ahora con `valor` para poder aplicarlo: se guarda sin
+            # repetir el evento en el historial.
+            expedicion.cambios_erp = diferencias
+            expedicion.save(update_fields=['cambios_erp', 'fecha_actualizacion'])
         return  # ya avisado (el conector reenvía cada poco)
-    if diferencias and diferencias == expedicion.cambios_erp_descartados:
+    if diferencias and _sin_valor(diferencias) == _sin_valor(expedicion.cambios_erp_descartados):
         return  # alguien ya lo revisó y lo dejó así
+    # Fuera del plazo de corrección (o en papel) el DeCA ya no puede cambiar:
+    # no se abre un aviso nuevo (decisión del usuario 2026-10-14). Uno que ya
+    # estuviera abierto se queda para que alguien lo resuelva, y se sigue
+    # quitando solo si el ERP vuelve a coincidir.
+    if diferencias and not puede_editar_generado(expedicion):
+        return
     expedicion.cambios_erp = diferencias
     expedicion.cambios_erp_en = timezone.now() if diferencias else None
     expedicion.save(update_fields=['cambios_erp', 'cambios_erp_en', 'fecha_actualizacion'])
@@ -254,6 +277,10 @@ class IngestaExpedicionDecaView(APIView):
         # `peso_kg`. `peso_bruto_kg` ya entra tal cual (CAMPOS_INTEGRACION).
         if 'peso_kg' not in datos and 'peso_neto_kg' in request.data:
             datos['peso_kg'] = request.data['peso_neto_kg']
+        # Igual con los bultos: `bultos_cajas` es el nombre claro; en el DeCA
+        # las cajas van en `bultos`. `bultos_palets` entra tal cual.
+        if 'bultos' not in datos and 'bultos_cajas' in request.data:
+            datos['bultos'] = request.data['bultos_cajas']
         # El ERP suele traer el nombre del transportista pero no su NIF: se
         # completa desde la Agenda, igual que al leer un documento. Si la
         # coincidencia no es exacta (una errata en el nombre), nadie la ha

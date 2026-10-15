@@ -433,7 +433,11 @@ class ExpedicionDeca(BaseModel):
     # Peso BRUTO (con envases y palets), junto al neto en la misma línea
     # (2026-10-06). La norma solo pide "el peso": basta con uno de los dos.
     peso_bruto_kg = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # Bultos en dos números, como el peso (2026-10-14): CAJAS (`bultos`, el
+    # campo de siempre, para no romper al ERP) y PALETS. Ninguno es
+    # obligatorio: la Orden FOM/2861/2012 (art. 6.d) solo pide el peso.
     bultos = models.PositiveIntegerField(null=True, blank=True)
+    bultos_palets = models.PositiveIntegerField(null=True, blank=True)
     volumen_m3 = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     codigo_mercancia = models.CharField(
         max_length=50, blank=True,

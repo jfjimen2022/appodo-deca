@@ -38,7 +38,7 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 5432
-    entrypoint: ["sh", "-c", "sleep 60; while true; do python manage.py avisar_deca_sin_completar; python manage.py purgar_ips_eventos_deca; sleep 3600; done"]
+    entrypoint: ["sh", "-c", "sleep 60; while true; do python manage.py avisar_deca_sin_completar; python manage.py purgar_ips_eventos_deca; python manage.py caducar_avisos_erp; sleep 3600; done"]
     depends_on:
       db:
         condition: service_healthy

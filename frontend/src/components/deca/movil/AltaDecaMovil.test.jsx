@@ -322,8 +322,11 @@ describe('AltaDecaMovil', () => {
     montar({ camposObligatorios: [...OBLIGATORIOS, 'nombre_destinatario', 'nif_destinatario'] })
     fireEvent.click(screen.getByText('movil.mas_datos'))
     expect(screen.getByLabelText('movil.campo_volumen_m3')).toBeInTheDocument()
-    // Peso, bultos y remolque ya no son opcionales (BOE, 2026-09-30).
+    // Peso y remolque ya no son opcionales (BOE, 2026-09-30).
     expect(screen.queryByText('movil.campo_matricula_remolque')).not.toBeInTheDocument()
+    // Los bultos sí (2026-10-14): palets y cajas, sin marca de obligatorio.
+    expect(screen.getByLabelText('movil.campo_bultos_palets')).not.toHaveAttribute('aria-required')
+    expect(screen.getByLabelText('movil.campo_bultos')).not.toHaveAttribute('aria-required')
     expect(screen.getByLabelText('movil.campo_autorizacion_especial')).toBeInTheDocument()
     expect(screen.queryByLabelText('movil.campo_nombre_destinatario')).toBeInTheDocument()
     // ...pero en la lista principal (pendiente), no en el grupo opcional.
