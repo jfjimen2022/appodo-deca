@@ -1,7 +1,7 @@
 # Appodo DeCa
 
 [![Licencia: AGPL v3](https://img.shields.io/badge/Licencia-AGPL%20v3-blue.svg)](LICENSE)
-[![Versión](https://img.shields.io/badge/versión-v03.1-informational)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/versión-v03.2-informational)](CHANGELOG.md)
 [![Stack](https://img.shields.io/badge/stack-Django%20%2B%20React-informational)](#stack)
 
 **Appodo DeCa** es una app gratuita, autoalojable (self-hosted) y de código
@@ -157,7 +157,7 @@ código bajo la misma licencia.
 `v03` — sincronizado con el módulo DeCA de Appodo v4.49.3 (incluye la
 conexión con el ERP de la empresa, ver
 [`docs/INTEGRACION_ERP.md`](docs/INTEGRACION_ERP.md)). Suite de tests del
-backend (601 tests, Python 3.12 como la imagen Docker) y del frontend (77
+backend (611 tests, Python 3.12 como la imagen Docker) y del frontend (77
 tests) en verde. Las capturas de arriba son de `v01`.
 Quedan TODOs explícitos en el código (`TODO(standalone):`, ver
 [`CHANGELOG.md`](CHANGELOG.md)) antes de considerarlo listo para producción

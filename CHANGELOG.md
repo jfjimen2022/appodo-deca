@@ -6,7 +6,7 @@ SemVer del ERP Appodo — cada entrada que proviene de un resync de código
 anota además la versión y fecha de Appodo de origen (ver
 `docs/PLAN_EXTRACCION.md`, sección "Nombre y versión").
 
-## [Sin publicar]
+## [v03.2] — 2026-10-15
 
 ### Cambiado
 
