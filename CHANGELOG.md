@@ -32,7 +32,10 @@ anota además la versión y fecha de Appodo de origen (ver
 
 ### Al actualizar
 
-- `python manage.py migrate` y reiniciar el servicio `scheduler`.
+- Nada a mano con el procedimiento habitual (`docker compose up -d --build`,
+  ver `docs/INSTALACION.md` §11): la migración `0005` se aplica sola al
+  arrancar el backend y el `scheduler` se recrea con el comando nuevo. Solo
+  si se actualiza de otra forma hay que recrear el `scheduler`.
 
 ## [v03.1] — 2026-10-13
 
