@@ -177,6 +177,9 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
     ancho_titulo_mm = ANCHO_UTIL_MM - TAMANO_QR_MM - 5
 
     linea_albaran = f'Nº de albarán: <b>{expedicion.numero_albaran or "—"}</b>'
+    # Nº del DeCA en su serie (todo DeCA generado desde v4.56.0 lo lleva).
+    if expedicion.numero_interno:
+        linea_albaran = f'Nº DeCA: <b>{expedicion.numero_interno}</b> &nbsp;·&nbsp; ' + linea_albaran
     if expedicion.numero_cmr:
         linea_albaran += f' &nbsp;·&nbsp; Nº de CMR: <b>{expedicion.numero_cmr}</b>'
     if expedicion.numero_pedido:
@@ -291,6 +294,10 @@ def generar_pdf_deca(expedicion: ExpedicionDeca, qr_png: bytes, borrador: bool =
     # Art. 6.e: solo cuando se circula con autorización especial.
     if expedicion.autorizacion_especial:
         filas_transporte.append(_fila('Autorización especial de circulación', expedicion.autorizacion_especial))
+    # Parcela de origen (SIGPAC): solo si se ha rellenado algo.
+    sigpac = (expedicion.sigpac_poligono, expedicion.sigpac_parcela, expedicion.sigpac_recinto)
+    if any(sigpac):
+        filas_transporte.append(_fila('Datos SIGPAC (polígono / parcela / recinto)', ' / '.join(v or '—' for v in sigpac)))
     # Hecho sin cobertura: el documento que viajó en el camión fue el impreso
     # en el móvil; este PDF lo registra y lo dice.
     if expedicion.emitido_sin_conexion_en:
@@ -450,6 +457,7 @@ ETIQUETAS_CAMPO = {
     'nif_destinatario': 'NIF del destinatario', 'nombre_destinatario': 'Destinatario',
     'matricula_tractor': 'Matrícula vehículo / tractora', 'matricula_remolque': 'Matrícula remolque',
     'sin_remolque': 'Sin remolque', 'autorizacion_especial': 'Autorización especial',
+    'sigpac_poligono': 'SIGPAC: polígono', 'sigpac_parcela': 'SIGPAC: parcela', 'sigpac_recinto': 'SIGPAC: recinto',
     'origen': 'Origen', 'destino': 'Destino', 'fecha_hora_transporte': 'Fecha y hora del transporte',
     'naturaleza_mercancia': 'Naturaleza de la mercancía', 'peso_kg': 'Peso neto (kg)', 'peso_bruto_kg': 'Peso bruto (kg)', 'peso_estimado': 'Peso estimado',
     'bultos': 'Bultos cajas', 'bultos_palets': 'Bultos palets', 'volumen_m3': 'Volumen (m³)', 'codigo_mercancia': 'Código de la mercancía',

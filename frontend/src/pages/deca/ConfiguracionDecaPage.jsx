@@ -27,6 +27,7 @@ import PrecisionLecturaDeca from '../../components/deca/PrecisionLecturaDeca'
 import TrabajoCampoDeca from '../../components/deca/TrabajoCampoDeca'
 import PrioridadAgendaDeca from '../../components/deca/PrioridadAgendaDeca'
 import ClavesIntegracionDeca from '../../components/deca/ClavesIntegracionDeca'
+import SeriesNumeracionDeca from '../../components/deca/SeriesNumeracionDeca'
 
 // TODO(standalone): en el ERP origen esta pantalla incluía una tarjeta de
 // "Repositorio y custodia legal" que conectaba con Google Drive de la
@@ -61,7 +62,6 @@ const CONFIG_VACIA = {
   ultimo_numero_automatico: 0,
   modo_sin_cobertura: 'imprimir',
   ejemplares_sin_cobertura: 2,
-  registrar_papel_por_foto: false,
   deca_anticipado: false,
   aviso_sin_completar: true,
   aviso_sin_completar_dias: 2,
@@ -257,27 +257,13 @@ export default function ConfiguracionDecaPage() {
             </Select>
           </div>
 
-          {config.identificador_preferido === 'automatico' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md pt-1">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-gray-500">{t('configuracion.label_prefijo_automatico', 'Prefijo')}</Label>
-                <Input
-                  value={config.prefijo_numero_automatico}
-                  onChange={(e) => set('prefijo_numero_automatico', e.target.value)}
-                  placeholder="DECA-"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-gray-500">{t('configuracion.label_ultimo_numero', 'Último número emitido')}</Label>
-                <Input value={config.ultimo_numero_automatico} disabled />
-              </div>
-            </div>
-          )}
           <p className="text-xs text-gray-500">
-            {t('configuracion.ayuda_identificador_automatico', 'El contador automático solo numera al Generar el DeCA (nunca en Borrador) y solo si la expedición no tiene ya un número de albarán o CMR propio.')}
+            {t('configuracion.ayuda_identificador_serie', 'Todo DeCA recibe al generarse el número de su serie (ver «Series de numeración»). Aquí eliges cuál de los números se enseña al cliente; si una expedición no tiene albarán ni CMR, se enseña el de la serie.')}
           </p>
         </CardContent>
       </Card>
+
+      <SeriesNumeracionDeca />
 
         <Card>
           <CardHeader className="pb-2">

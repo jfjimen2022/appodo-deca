@@ -15,7 +15,7 @@
     "col_matricula": "Matrícula",
     "col_fecha_transporte": "Fecha transporte",
     "col_acceso_publico": "Acceso público",
-    "col_creado_por": "Creado por",
+    "col_creado_por": "Usuario",
     "col_referencia_externa": "Ref. ERP",
     "creado_por_erp": "ERP ({{nombre}})",
     "col_acciones": "Acciones",
@@ -56,14 +56,16 @@
     "btn_copiar_enlace": "Copiar enlace público",
     "enlace_copiado": "Enlace copiado.",
     "btn_enviar_email": "Enviar por email",
-    "estado_papel": "DeCA en papel",
-    "filtro_papel": "DeCA en papel",
     "filtro_origen_erp": "Recibidos del ERP",
-    "filtro_origen_appodo": "Hechos en Appodo",
+    "filtro_origen_appodo": "Creados a mano (no del ERP)",
     "filtro_modificado_erp": "Modificados en el ERP",
     "filtro_incompletas": "Les falta algún dato",
+    "filtro_mias": "Hechas por mí",
+    "filtro_todas": "Todas (de todos los usuarios)",
     "pagina_anterior": "Página anterior",
-    "pagina_siguiente": "Página siguiente"
+    "pagina_siguiente": "Página siguiente",
+    "col_numero_deca": "Nº DeCA",
+    "filtro_serie": "Serie {{nombre}}"
   },
   "dashboard": {
     "title": "DeCA",
@@ -332,7 +334,12 @@
     "placeholder_autorizacion_especial": "Solo en transportes especiales",
     "ayuda_naturaleza": "Qué mercancía es, en palabras corrientes: el nombre del producto vale («Aguacate Hass en cajas de 4 kg»). Sin códigos de artículo, referencias internas ni lotes, y nada tan genérico como «Mercancía» o «Varios». Si es mercancía peligrosa (ADR), su nombre oficial y número ONU.",
     "agenda_manda_titulo": "Datos tomados de tu agenda (la agenda manda sobre lo leído):",
-    "nifs_por_orden": "NIF que la lectura encontró sin saber de quién son y que se han repartido por orden de aparición; compruébalos:"
+    "nifs_por_orden": "NIF que la lectura encontró sin saber de quién son y que se han repartido por orden de aparición; compruébalos:",
+    "bloque_sigpac": "Datos SIGPAC",
+    "bloque_sigpac_desc": "Opcional: parcela de origen de la mercancía. Si se deja en blanco, no aparece en el PDF.",
+    "label_sigpac_poligono": "Polígono",
+    "label_sigpac_parcela": "Parcela",
+    "label_sigpac_recinto": "Recinto"
   },
   "documentos": {
     "title": "Documentos origen",
@@ -361,8 +368,7 @@
     "estado_descripcion_borrador": "Datos incompletos o pendientes de revisión",
     "estado_descripcion_confirmada": "Datos completos y validados",
     "estado_descripcion_generada": "DeCA generado y disponible",
-    "estado_descripcion_anulada": "Expedición anulada",
-    "papel": "DeCA en papel"
+    "estado_descripcion_anulada": "Expedición anulada"
   },
   "tipos": {
     "alb_venta": "Albarán de venta",
@@ -445,7 +451,7 @@
     "seccion_documentos": "Documentos origen",
     "sin_documentos": "No hay documentos origen adjuntos.",
     "btn_adjuntar": "Adjuntar documento",
-    "adjuntar_ayuda": "Puedes seguir adjuntando documentos (por ejemplo, el CMR firmado). No cambian el DeCA ni su QR, y no se pueden quitar después.",
+    "adjuntar_ayuda": "Puedes seguir adjuntando documentos (por ejemplo, el CMR firmado o la hoja del talonario). No cambian el DeCA ni su QR, y no se pueden quitar después.",
     "adjunto_ok_one": "Documento adjuntado.",
     "adjunto_ok_other": "{{count}} documentos adjuntados.",
     "adjunto_error": "No se pudo adjuntar el documento.",
@@ -487,7 +493,7 @@
     "email_error_enviar": "No se pudo enviar el email.",
     "email_enviando": "Enviando...",
     "email_btn_enviar": "Enviar",
-    "evento_registrada_papel": "Registrada como DeCA en papel"
+    "label_sigpac": "Datos SIGPAC (polígono / parcela / recinto)"
   },
   "configuracion": {
     "title": "Configuración de DeCA",
@@ -567,21 +573,19 @@
     "label_preparado_por": "Preparado por",
     "label_autorizado_por": "Autorizado por",
     "tarjeta_identificador": "Referencia de la expedición",
-    "tarjeta_identificador_desc": "Qué número identifica una expedición de cara al cliente: en el asunto del email, el nombre del PDF y el historial de auditoría. Si el campo elegido está vacío en una expedición concreta, se usa el siguiente disponible (albarán → CMR → contador automático), nunca se deja sin nada.",
+    "tarjeta_identificador_desc": "Qué número identifica una expedición de cara al cliente: en el asunto del email, el nombre del PDF y el historial de auditoría. Si el campo elegido está vacío en una expedición concreta, se usa el siguiente disponible (albarán → CMR → número de la serie), nunca se deja sin nada.",
     "label_identificador_preferido": "Referencia preferida",
     "identificador_albaran": "Número de albarán",
     "identificador_cmr": "Número de CMR",
-    "identificador_automatico": "Contador automático de Appodo",
-    "label_prefijo_automatico": "Prefijo",
-    "label_ultimo_numero": "Último número emitido",
-    "ayuda_identificador_automatico": "El contador automático solo numera al Generar el DeCA (nunca en Borrador) y solo si la expedición no tiene ya un número de albarán o CMR propio.",
+    "identificador_automatico": "Número de la serie (Appodo)",
     "tarjeta_plantilla_email": "Plantilla del email de envío",
     "tarjeta_plantilla_email_desc": "Opcional: personaliza el asunto y el mensaje con los que se envía el DeCA por email. Vacío = se usa el mensaje estándar de Appodo (asunto = referencia de la expedición, según lo elegido en General → \"Referencia de la expedición\").",
     "label_plantilla_asunto": "Asunto (concepto) por defecto",
     "plantilla_asunto_placeholder": "{identificador}",
     "label_plantilla_cuerpo": "Mensaje por defecto",
     "plantilla_cuerpo_placeholder": "Adjunto el DeCA de la expedición {identificador}...",
-    "plantilla_email_placeholders": "Placeholders disponibles: {identificador} (según lo elegido en \"Referencia de la expedición\") {numero_albaran} {origen} {destino} {matricula_tractor} {empresa}."
+    "plantilla_email_placeholders": "Placeholders disponibles: {identificador} (según lo elegido en \"Referencia de la expedición\") {numero_albaran} {origen} {destino} {matricula_tractor} {empresa}.",
+    "ayuda_identificador_serie": "Todo DeCA recibe al generarse el número de su serie (ver «Series de numeración»). Aquí eliges cuál de los números se enseña al cliente; si una expedición no tiene albarán ni CMR, se enseña el de la serie."
   },
   "agenda": {
     "title": "Agenda",
@@ -837,7 +841,15 @@
     "camion_sin_remolque": "Sin remolque (camión rígido o furgoneta)",
     "sin_remolque_valor": "Sin remolque (camión rígido o furgoneta)",
     "si_lleva_remolque": "Sí lleva",
-    "ejemplo_naturaleza_mercancia": "Qué mercancía es, con su nombre corriente: «Aguacate Hass en cajas de 4 kg» o, si son varios, «Fruta fresca: aguacate y mango». Sin códigos de artículo, referencias ni lotes."
+    "ejemplo_naturaleza_mercancia": "Qué mercancía es, con su nombre corriente: «Aguacate Hass en cajas de 4 kg» o, si son varios, «Fruta fresca: aguacate y mango». Sin códigos de artículo, referencias ni lotes.",
+    "grupo_sigpac": "Datos SIGPAC",
+    "campo_sigpac_poligono": "Polígono (SIGPAC)",
+    "campo_sigpac_parcela": "Parcela (SIGPAC)",
+    "campo_sigpac_recinto": "Recinto (SIGPAC)",
+    "como_empezar": "¿Cómo lo quieres hacer?",
+    "rellenar_a_mano_desc": "Escribes o eliges de la agenda",
+    "subir_archivo_desc": "Un archivo que ya tienes en el móvil. La app lee los datos",
+    "foto_albaran_desc": "o del CMR, con la cámara. La app lee los datos"
   },
   "sinonimos": {
     "tab": "Sinónimos aprendidos",
@@ -994,7 +1006,7 @@
     "listo_titulo": "DeCA listo para imprimir",
     "listo_desc": "Referencia {{referencia}}. Imprime los ejemplares: el del transportista viaja en el camión. El QR ya va impreso y llevará al DeCA en Appodo en cuanto vuelva la cobertura y se registre.",
     "imprimir": "Imprimir",
-    "imprimir_ayuda": "Sirve la impresora de la caseta (wifi o bluetooth) o \"Guardar como PDF\" para mandarlo después al conductor.",
+    "imprimir_ayuda": "Sirve la impresora de la caseta (wifi o bluetooth). Si al pulsar Imprimir no aparece nada, o no hay impresora, usa el botón de abajo.",
     "volver_lista": "Volver a Expediciones",
     "pendientes_one": "{{count}} DeCA hecho sin cobertura pendiente de registrar en Appodo",
     "pendientes_other": "{{count}} DeCA hechos sin cobertura pendientes de registrar en Appodo",
@@ -1038,8 +1050,15 @@
       "pie": "DeCA emitido sin conexión. Debe viajar a bordo durante el transporte (art. 3) y conservarse un año (art. 9).",
       "copia_destinatario": "Ejemplar para el destinatario",
       "qr": "Código QR del DeCA",
-      "qr_explicacion": "QR del DeCA: lleva al documento en Appodo en cuanto el móvil que lo emitió vuelva a tener red."
-    }
+      "qr_explicacion": "QR del DeCA: lleva al documento en Appodo en cuanto el móvil que lo emitió vuelva a tener red.",
+      "sigpac": "SIGPAC (polígono / parcela / recinto)"
+    },
+    "pdf_boton": "Guardar o compartir PDF",
+    "pdf_generando": "Generando PDF...",
+    "pdf_ayuda": "Genera el PDF en el móvil, sin red: guárdalo, mándalo por WhatsApp o correo, o que el transportista le haga una foto.",
+    "pdf_compartido": "PDF listo.",
+    "pdf_descargado": "PDF guardado en Descargas.",
+    "pdf_error": "No se pudo generar el PDF. Haz una foto de esta pantalla mientras tanto."
   },
   "campo": {
     "cfg_titulo": "Trabajo en campo y sin cobertura",
@@ -1059,8 +1078,6 @@
     "ejemplares_3": "3 — transportista, cargador y destinatario",
     "cfg_ejemplares_desc": "Cuántas copias salen al imprimir sin cobertura. La del transportista es la que viaja en el camión (siempre sale); las demás llevan casillas de firma para quien se queda con ella.",
     "cfg_ejemplares_solo_imprimir": "Solo se usa con \"Imprimir en el móvil\".",
-    "cfg_papel": "Registrar DeCA de papel por foto",
-    "cfg_papel_desc": "Si alguien rellena un DeCA a bolígrafo en el talonario, después se le hace una foto y se registra en Appodo como «DeCA en papel», con los mismos datos obligatorios, para que quede constancia. Ojo: desde el 5 de octubre de 2026 un DeCA a bolígrafo NO es un DeCA válido (la norma exige un PDF nativo con QR, no admite escaneos ni tiene en cuenta anotaciones manuscritas): registrarlo aquí deja constancia interna, no lo convierte en válido. Necesita red para subir la foto.",
     "cfg_anticipado": "DeCA anticipado (peso estimado)",
     "cfg_anticipado_desc": "Permite preparar y generar el DeCA en la oficina antes de que llegue el camión, marcando el peso como estimado (\"Peso estimado\" en el formulario; en el PDF sale \"(estimado)\"). El peso real se pone después dentro de las horas para corregir un DeCA ya generado.",
     "cfg_anticipado_legal": "Ojo: la norma pide el peso de lo que se transporta (art. 6.d). El peso real tiene que estar puesto ANTES de que salga el camión, y el papel o el QR que lleva el conductor tiene que ser el corregido. Si no podéis asegurarlo, dejadlo apagado.",
@@ -1085,20 +1102,12 @@
     "guardado_para_luego_titulo": "DeCA guardado en el móvil",
     "guardado_para_luego_desc": "Referencia {{referencia}}. Se generará con su QR en cuanto vuelva la cobertura; lo verás en Expediciones.",
     "guardado_para_luego_aviso": "Hasta que se genere no hay DeCA. Si el camión tiene que salir ya, usa el talonario de papel.",
-    "movil_registrar_papel": "Registrar un DeCA de papel (talonario)",
-    "movil_papel_banner": "Registrando un DeCA de papel: copia los datos tal como están en el papel. No se genera QR; la foto queda como copia.",
-    "btn_registrar_papel": "Registrar como DeCA en papel",
-    "papel_registrado_ok": "DeCA de papel registrado",
-    "papel_falta_foto": "Falta la foto del DeCA de papel: es la copia del documento que viajó.",
-    "papel_necesita_red": "Registrar un DeCA de papel necesita red para subir la foto.",
-    "papel_error": "No se pudo registrar el DeCA de papel.",
     "peso_estimado": "Peso estimado (poner el real antes de que salga el camión)",
     "estimado": "estimado",
     "movil_peso_es_estimado": "El peso es estimado",
     "movil_peso_estimado_valor": "Peso estimado",
     "movil_peso_real": "Ya es el real",
     "detalle_peso_estimado": "Peso estimado: corrígelo con el peso real (Corregir datos) antes de que salga el camión, y que el conductor lleve el DeCA corregido.",
-    "detalle_papel": "DeCA en papel: se rellenó en el talonario y se registró después con su foto. No tiene PDF ni QR de Appodo.",
     "listo_sin_cobertura": "Listo para trabajar sin cobertura · agenda del {{fecha}}",
     "preparando": "Preparando el móvil para trabajar sin cobertura…",
     "no_preparado_sin_red": "Este móvil no tiene la agenda guardada: sin red tendrás que escribirlo todo a mano. La próxima vez basta con entrar en Appodo con red antes de salir.",
@@ -1165,5 +1174,28 @@
     "leyenda_matriculas": "Matrículas: valen las españolas actuales, las de remolque con la R delante (R1234BCD), las antiguas provinciales (CA1234AB) y las extranjeras. Si una matrícula leída a mano se parece a una de la agenda, se propone la de la agenda.",
     "leyenda_naturaleza": "Naturaleza de la mercancía: la lectura escribe qué mercancía es en palabras corrientes (el nombre del producto vale), sin códigos de artículo, referencias ni lotes (Orden FOM/2861/2012 art. 6.d; Convenio CMR art. 6: «denominación corriente»).",
     "aviso_varios": "En tu agenda el mismo nombre tiene varios NIF (fichas duplicadas o de pruebas): Appodo no elige ninguno a ciegas, avisa y te pide que dejes solo el bueno en la agenda."
+  },
+  "series": {
+    "titulo": "Series de numeración",
+    "serie": "Serie",
+    "elegir": "Elegir serie",
+    "por_defecto": "por defecto",
+    "numero_deca": "Nº DeCA",
+    "desc": "Cada DeCA recibe al generarse el siguiente número de su serie, tenga o no albarán. Crea una serie por actividad (p. ej. Algodón, Tomates) si quieres numerarlas por separado. Al hacer un DeCA se usa la serie por defecto, salvo que se elija otra.",
+    "error_cargar": "No se pudieron cargar las series.",
+    "error_guardar": "No se pudo guardar la serie.",
+    "guardada": "Serie guardada.",
+    "creada": "Serie creada.",
+    "col_nombre": "Actividad",
+    "col_prefijo": "Prefijo",
+    "col_digitos": "Cifras",
+    "col_siguiente": "Siguiente número",
+    "col_defecto": "Por defecto",
+    "col_activa": "Activa",
+    "ph_nombre": "Nueva actividad",
+    "btn_anadir": "Añadir serie",
+    "ayuda": "El número se pone al generar el DeCA (un borrador que se borra no gasta número) y no cambia aunque se corrija después. Una serie que ya se ha usado no se borra: se desactiva.",
+    "aviso_sin_albaran": "Este DeCA no tiene nº de albarán ni de CMR: su referencia será el número de la serie {{serie}}. Si tiene albarán, cancela y escríbelo antes de generar.",
+    "aviso_sin_albaran_movil": "No tiene nº de albarán ni de CMR: su referencia será el número de la serie. Si tiene albarán, pulsa «Todavía no» y escríbelo."
   }
 }

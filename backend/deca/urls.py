@@ -1,5 +1,5 @@
 """Rutas de la API de DeCA (/api/v1/deca/...): configuración, expediciones y su
-ciclo de vida (confirmar, vista previa, generar, anular, registrar papel,
+ciclo de vida (confirmar, vista previa, generar, anular,
 enviar por email), documentos origen y extracción, agenda (seis catálogos,
 importación y exportación), sinónimos aprendidos, modelos de documento,
 precisión de lectura, auditoría, descarga pública por QR y gestión de
@@ -48,6 +48,8 @@ urlpatterns = [
         views.PlantillaDocumentoDecaDetailView.as_view(),
         name='deca-plantilla-detalle',
     ),
+    path('deca/series/', views.SerieNumeracionDecaListView.as_view(), name='deca-series'),
+    path('deca/series/<uuid:pk>/', views.SerieNumeracionDecaDetailView.as_view(), name='deca-serie-detalle'),
     path('deca/tractoras/', views.TractoraDecaListView.as_view(), name='deca-tractoras'),
     path('deca/tractoras/<uuid:pk>/', views.TractoraDecaDetailView.as_view(), name='deca-tractora-detalle'),
     path('deca/remolques/', views.RemolqueDecaListView.as_view(), name='deca-remolques'),
@@ -113,11 +115,6 @@ urlpatterns = [
         'deca/expediciones/<uuid:expedicion_id>/anular/',
         views.AnularExpedicionDecaView.as_view(),
         name='deca-expedicion-anular',
-    ),
-    path(
-        'deca/expediciones/<uuid:expedicion_id>/registrar-papel/',
-        views.RegistrarPapelExpedicionDecaView.as_view(),
-        name='deca-expedicion-registrar-papel',
     ),
     path(
         'deca/expediciones/<uuid:expedicion_id>/descartar-cambios-erp/',

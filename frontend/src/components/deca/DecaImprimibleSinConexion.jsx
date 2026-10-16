@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import QRCode from 'react-qr-code'
-import { Printer, CheckCircle2, ArrowLeft, AlertTriangle } from 'lucide-react'
+import { Printer, CheckCircle2, ArrowLeft, AlertTriangle, FileDown, Loader2 } from 'lucide-react'
 import { decaService } from '../../services/decaService'
 
 // DeCA hecho SIN COBERTURA (2026-09-30): la hoja que se imprime en la finca
@@ -13,12 +13,21 @@ import { decaService } from '../../services/decaService'
 //
 // Se imprime desde el propio móvil (impresora wifi/bluetooth de la caseta o
 // "Guardar como PDF" para mandarlo después): nada de esto necesita internet.
+// Donde window.print() no hace nada (iPhone con la app en la pantalla de
+// inicio, algunos Android con la app instalada), el botón "Guardar o
+// compartir PDF" genera el PDF en el propio móvil (lib/decaPdfSinConexion.js).
 
 function fechaLegible(valor) {
   if (!valor) return ''
   const d = new Date(valor)
   if (Number.isNaN(d.getTime())) return String(valor)
   return d.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+// "polígono / parcela / recinto", o vacío si no hay ninguno (la fila no sale).
+export function sigpacTexto(d) {
+  const v = [d?.sigpac_poligono, d?.sigpac_parcela, d?.sigpac_recinto]
+  return v.some(Boolean) ? v.map((x) => x || '—').join(' / ') : ''
 }
 
 function Fila({ etiqueta, valor }) {
@@ -49,7 +58,7 @@ function Ejemplar({ item, empresaNombre, destinatarioCopia, t }) {
           {/* QR del DeCA: el código lo generó el móvil y Appodo lo adopta al
               registrarlo, así que lleva al DeCA en cuanto vuelve la red. */}
           {item.token_publico && (
-            <QRCode value={decaService.urlDescargaPublica(item.token_publico)} size={96} aria-label={t('offline.imp.qr')} />
+            <QRCode data-deca-qr="" value={decaService.urlDescargaPublica(item.token_publico)} size={96} aria-label={t('offline.imp.qr')} />
           )}
         </div>
       </header>
@@ -77,6 +86,7 @@ function Ejemplar({ item, empresaNombre, destinatarioCopia, t }) {
             valor={`${d.bultos_palets != null && d.bultos_palets !== '' ? d.bultos_palets : '—'} · ${t('offline.imp.bultos')}: ${d.bultos != null && d.bultos !== '' ? d.bultos : '—'}`}
           />
           <Fila etiqueta={t('offline.imp.autorizacion')} valor={d.autorizacion_especial} />
+          <Fila etiqueta={t('offline.imp.sigpac')} valor={sigpacTexto(d)} />
           <Fila etiqueta={t('offline.imp.conductor')} valor={[d.nombre_conductor, d.nif_conductor].filter(Boolean).join(' · ')} />
           <Fila etiqueta={t('offline.imp.albaran')} valor={[d.numero_albaran, d.numero_cmr].filter(Boolean).join(' · ')} />
           <Fila etiqueta={t('offline.imp.observaciones')} valor={d.comentarios} />
@@ -103,7 +113,31 @@ const COPIAS = ['offline.imp.copia_transportista', 'offline.imp.copia_cargador',
 export default function DecaImprimibleSinConexion({ item, empresaNombre, onCerrar, ejemplares = 2, soloGuardado = false }) {
   const { t } = useTranslation('deca')
   const refTitulo = useRef(null)
+  const refHojas = useRef(null)
+  const [pdf, setPdf] = useState({ estado: 'listo', mensaje: '' })
   useEffect(() => { refTitulo.current?.focus() }, [])
+
+  const copias = COPIAS.slice(0, Math.min(3, Math.max(1, Number(ejemplares) || 2)))
+
+  const guardarPdf = async () => {
+    setPdf({ estado: 'generando', mensaje: '' })
+    try {
+      // Import diferido: jsPDF solo se carga al usarlo (el service worker
+      // precachea el chunk, así que también funciona sin red).
+      const { generarPdfSinConexion, svgAPng, compartirODescargar } = await import('../../lib/decaPdfSinConexion')
+      const svg = refHojas.current?.querySelector('svg[data-deca-qr]')
+      const qrPng = svg ? await svgAPng(svg) : null
+      const blob = generarPdfSinConexion({
+        item, empresaNombre, copias: copias.map((c) => t(c)), qrPng,
+        urlQr: item.token_publico ? decaService.urlDescargaPublica(item.token_publico) : null, t,
+      })
+      const nombre = `DeCA_${String(item.referencia || 'sin-conexion').replace(/[^A-Za-z0-9_-]+/g, '-')}.pdf`
+      const resultado = await compartirODescargar(blob, nombre, t('offline.imp.titulo'))
+      setPdf({ estado: 'listo', mensaje: resultado === 'cancelado' ? '' : t(`offline.pdf_${resultado}`) })
+    } catch (e) {
+      setPdf({ estado: 'listo', mensaje: t('offline.pdf_error') })
+    }
+  }
 
   return createPortal(
     <div className="deca-imprimible fixed inset-0 z-[60] flex flex-col overflow-y-auto bg-[#F1EEF0] text-[#111]">
@@ -143,6 +177,18 @@ export default function DecaImprimibleSinConexion({ item, empresaNombre, onCerra
           <Printer className="h-7 w-7" aria-hidden="true" />{t('offline.imprimir')}
         </button>
         <p className="text-[16px] font-bold text-[#3B333A]">{t('offline.imprimir_ayuda')}</p>
+        <button
+          type="button"
+          onClick={guardarPdf}
+          disabled={pdf.estado === 'generando'}
+          className="flex min-h-[64px] items-center justify-center gap-2 rounded-2xl border-2 border-[#08622F] bg-white text-[20px] font-bold text-[#08622F] active:scale-[0.98] disabled:opacity-60 motion-reduce:transform-none"
+        >
+          {pdf.estado === 'generando'
+            ? <><Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />{t('offline.pdf_generando')}</>
+            : <><FileDown className="h-6 w-6" aria-hidden="true" />{t('offline.pdf_boton')}</>}
+        </button>
+        <p className="text-[16px] font-bold text-[#3B333A]">{t('offline.pdf_ayuda')}</p>
+        {pdf.mensaje && <p role="status" className="text-[16px] font-bold text-[#08622F]">{pdf.mensaje}</p>}
         </>)}
         <button
           type="button"
@@ -154,8 +200,8 @@ export default function DecaImprimibleSinConexion({ item, empresaNombre, onCerra
       </div>
 
       {!soloGuardado && (
-        <div className="px-2 pb-8">
-          {COPIAS.slice(0, Math.min(3, Math.max(1, Number(ejemplares) || 2))).map((clave) => (
+        <div ref={refHojas} className="px-2 pb-8">
+          {copias.map((clave) => (
             <Ejemplar key={clave} item={item} empresaNombre={empresaNombre} destinatarioCopia={t(clave)} t={t} />
           ))}
         </div>

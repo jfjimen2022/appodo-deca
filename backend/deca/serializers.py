@@ -26,6 +26,7 @@ from .models import (
     ExpedicionDeca,
     PlantillaDocumentoDeca,
     RemolqueDeca,
+    SerieNumeracionDeca,
     TractoraDeca,
     TransportistaSucesivoDeca,
 )
@@ -105,6 +106,51 @@ def _validar_matricula(valor: str, campo: str) -> str:
         ).replace('  ', ' ')})
 
 
+class SerieNumeracionDecaSerializer(serializers.ModelSerializer):
+    """Serie de numeración (Configuración de DeCA). El contador es de solo
+    lectura: lo mueve el servidor al Generar."""
+    # Explícitos: en un formulario multipart, un booleano que no se envía
+    # llegaría como False y la serie nacería desactivada.
+    activa = serializers.BooleanField(required=False, default=True)
+    por_defecto = serializers.BooleanField(required=False, default=False)
+
+    class Meta:
+        model = SerieNumeracionDeca
+        fields = ['id', 'nombre', 'prefijo', 'digitos', 'ultimo_numero', 'por_defecto', 'activa']
+        read_only_fields = ['id', 'ultimo_numero']
+
+    def validate_nombre(self, valor):
+        valor = (valor or '').strip()
+        if not valor:
+            raise serializers.ValidationError('Pon un nombre a la serie (p. ej. la actividad).')
+        repetida = SerieNumeracionDeca.objects.filter(nombre__iexact=valor)
+        if self.instance:
+            repetida = repetida.exclude(pk=self.instance.pk)
+        if repetida.exists():
+            raise serializers.ValidationError('Ya hay una serie con ese nombre.')
+        return valor
+
+    def validate(self, attrs):
+        activa = attrs.get('activa', getattr(self.instance, 'activa', True))
+        por_defecto = attrs.get('por_defecto', getattr(self.instance, 'por_defecto', False))
+        if por_defecto and not activa:
+            raise serializers.ValidationError(
+                {'activa': 'La serie por defecto no se puede desactivar: marca antes otra como serie por defecto.'})
+        return attrs
+
+    def save(self, **kwargs):
+        # Solo una por defecto: al marcar esta, se desmarca la anterior.
+        from django.db import transaction
+
+        with transaction.atomic():
+            if self.validated_data.get('por_defecto'):
+                otras = SerieNumeracionDeca.objects.filter(por_defecto=True)
+                if self.instance:
+                    otras = otras.exclude(pk=self.instance.pk)
+                otras.update(por_defecto=False)
+            return super().save(**kwargs)
+
+
 class ConfiguracionDecaSerializer(serializers.ModelSerializer):
     # Lista efectiva de obligatorios para Confirmar (según
     # `exigir_datos_destinatario`): la pantalla la usa para marcar los campos,
@@ -113,6 +159,9 @@ class ConfiguracionDecaSerializer(serializers.ModelSerializer):
     de campos obligatorios para que la pantalla los marque con la misma
     fuente que valida el servidor."""
     campos_obligatorios = serializers.SerializerMethodField()
+    # Series de numeración: viajan con la configuración para que el móvil las
+    # guarde con ella y pueda elegir serie sin cobertura.
+    series = serializers.SerializerMethodField()
 
     class Meta:
         model = ConfiguracionDeca
@@ -126,14 +175,20 @@ class ConfiguracionDecaSerializer(serializers.ModelSerializer):
             'informe_mostrar_cabecera', 'informe_codigo_documento', 'informe_version',
             'informe_edicion', 'informe_preparado_por', 'informe_autorizado_por',
             'plantilla_asunto_email', 'plantilla_cuerpo_email',
-            'modo_sin_cobertura', 'ejemplares_sin_cobertura', 'registrar_papel_por_foto',
+            'modo_sin_cobertura', 'ejemplares_sin_cobertura',
             'deca_anticipado', 'aviso_sin_completar', 'aviso_sin_completar_dias',
-            'agenda_prioritaria',
+            'agenda_prioritaria', 'series',
         ]
-        # El contador solo lo mueve identificador_service.asignar_numero_interno_si_procede
-        # (al Generar) -- editarlo a mano desde Configuración podría repetir
-        # o saltarse números ya emitidos.
+        # El contador solo lo mueve el servidor al Generar -- editarlo a mano
+        # desde Configuración podría repetir o saltarse números ya emitidos.
         read_only_fields = ['ultimo_numero_automatico']
+
+    def get_series(self, obj):
+        from .services.series_service import serie_por_defecto
+
+        serie_por_defecto()  # garantiza que exista al menos la «General»
+        qs = SerieNumeracionDeca.objects.order_by('-por_defecto', 'nombre')
+        return SerieNumeracionDecaSerializer(qs, many=True).data
 
     def get_campos_obligatorios(self, obj):
         """Campos obligatorios para Confirmar con esta configuración (incluye
@@ -288,6 +343,7 @@ class ExpedicionDecaSerializer(serializers.ModelSerializer):
     papel que viajó). Los campos calculados dicen a la pantalla qué puede
     hacer."""
     creado_por = serializers.SerializerMethodField()
+    generado_por = serializers.SerializerMethodField()
     documentos_origen = DocumentoOrigenDecaSerializer(many=True, read_only=True)
     transportistas_sucesivos = TransportistaSucesivoDecaSerializer(many=True, read_only=True)
     acceso_publico_vigente = serializers.SerializerMethodField()
@@ -303,6 +359,7 @@ class ExpedicionDecaSerializer(serializers.ModelSerializer):
             'nif_transportista', 'nombre_transportista',
             'nif_destinatario', 'nombre_destinatario',
             'matricula_tractor', 'matricula_remolque', 'sin_remolque', 'autorizacion_especial',
+            'sigpac_poligono', 'sigpac_parcela', 'sigpac_recinto',
             'referencia_offline', 'emitido_sin_conexion_en',
             'origen', 'destino', 'fecha_hora_transporte',
             'naturaleza_mercancia', 'peso_kg', 'peso_bruto_kg', 'peso_estimado', 'bultos', 'bultos_palets',
@@ -311,13 +368,14 @@ class ExpedicionDecaSerializer(serializers.ModelSerializer):
             'instrucciones_expedidor', 'instrucciones_pago', 'comentarios',
             'nombre_conductor', 'nif_conductor', 'telefono_conductor', 'email_conductor',
             'token_publico', 'hash_sha256', 'fecha_generacion', 'fecha_expiracion_publica',
-            'creado_por', 'documentos_origen', 'transportistas_sucesivos', 'acceso_publico_vigente',
+            'creado_por', 'generado_por', 'documentos_origen', 'transportistas_sucesivos', 'acceso_publico_vigente',
             'tiene_pdf_generado', 'puede_editar', 'fecha_limite_edicion',
             'referencia_externa', 'recibida_de', 'cambios_erp', 'cambios_erp_en',
+            'serie', 'serie_nombre',
         ]
         read_only_fields = [
             'id', 'estado', 'numero_interno', 'anio', 'mes', 'token_publico', 'hash_sha256',
-            'fecha_generacion', 'fecha_expiracion_publica', 'creado_por',
+            'fecha_generacion', 'fecha_expiracion_publica', 'creado_por', 'generado_por', 'serie_nombre',
             'documentos_origen', 'transportistas_sucesivos', 'acceso_publico_vigente',
             'tiene_pdf_generado', 'puede_editar', 'fecha_limite_edicion',
             # Solo la pone la integración al recibir el envío: es la huella
@@ -326,6 +384,24 @@ class ExpedicionDecaSerializer(serializers.ModelSerializer):
         ]
 
     recibida_de = serializers.SerializerMethodField()
+    # Serie elegida (id); vacía = la serie por defecto, que se fija al Generar.
+    serie = serializers.PrimaryKeyRelatedField(
+        queryset=SerieNumeracionDeca.objects.all(), required=False, allow_null=True,
+    )
+    serie_nombre = serializers.SerializerMethodField()
+
+    def get_serie_nombre(self, obj):
+        return obj.serie.nombre if obj.serie_id else None
+
+    def validate_serie(self, serie):
+        if serie is None:
+            # Con número ya asignado, «sin serie» no puede borrar la suya.
+            return self.instance.serie if self.instance and self.instance.numero_interno else None
+        if self.instance and self.instance.numero_interno and serie.id != self.instance.serie_id:
+            raise serializers.ValidationError('Este DeCA ya tiene número de su serie: la serie no se puede cambiar.')
+        if not serie.activa and serie.id != getattr(self.instance, 'serie_id', None):
+            raise serializers.ValidationError('Esa serie está desactivada.')
+        return serie
 
     def get_recibida_de(self, obj):
         """Nombre de la clave de integración por la que llegó, o None si se
@@ -335,6 +411,15 @@ class ExpedicionDecaSerializer(serializers.ModelSerializer):
     def get_creado_por(self, obj):
         """Nombre legible de quien creó la expedición."""
         return _nombre_usuario(obj.creado_por)
+
+    def get_generado_por(self, obj):
+        """Quién generó el DeCA (nombre). El listado lo trae anotado en la
+        misma consulta; en la ficha se busca en el historial."""
+        if hasattr(obj, 'generado_por_username'):
+            return (obj.generado_por_nombre or '').strip() or obj.generado_por_username
+        evento = (obj.eventos.filter(tipo_evento=EventoExpedicionDeca.TipoEvento.GENERADA, usuario__isnull=False)
+                  .select_related('usuario').order_by('-fecha_alta').first())
+        return _nombre_usuario(evento.usuario) if evento else None
 
     def get_acceso_publico_vigente(self, obj):
         """Si el QR público todavía sirve el PDF sin login (ventana legal
@@ -346,7 +431,7 @@ class ExpedicionDecaSerializer(serializers.ModelSerializer):
         # calcular horas a mano, así config y frontend nunca divergen.
         """Si la pantalla debe ofrecer editar: borrador/confirmado siempre;
         generado solo dentro del plazo de corrección."""
-        if obj.estado in (ExpedicionDeca.Estado.ANULADO, ExpedicionDeca.Estado.PAPEL):
+        if obj.estado == ExpedicionDeca.Estado.ANULADO:
             return False
         if obj.estado == ExpedicionDeca.Estado.GENERADO:
             return _puede_editar_generado(obj)
@@ -377,9 +462,6 @@ class ExpedicionDecaSerializer(serializers.ModelSerializer):
         # PDF y queda en el historial (ver ExpedicionDecaDetailView.perform_update).
         if self.instance and self.instance.estado == ExpedicionDeca.Estado.ANULADO:
             raise serializers.ValidationError('No se puede editar una expedición anulada.')
-        # Un DeCA en papel es la copia del documento que viajó: no se toca.
-        if self.instance and self.instance.estado == ExpedicionDeca.Estado.PAPEL:
-            raise serializers.ValidationError('No se puede editar un DeCA en papel ya registrado.')
         # Peso estimado solo si la empresa trabaja con DeCA anticipado.
         if attrs.get('peso_estimado'):
             config = ConfiguracionDeca.objects.filter(pk=1).first()

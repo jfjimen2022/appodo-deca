@@ -12,8 +12,6 @@ que tocar (una sola función para un mismo criterio: si se copia en dos
 sitios, acaba divergiendo)."""
 import re
 
-from django.db import transaction
-
 from ..models import ConfiguracionDeca, ExpedicionDeca, IdentificadorExpedicionDeca
 
 # Caracteres inválidos en un nombre de archivo (Windows es el más
@@ -78,33 +76,10 @@ def identificador_expedicion_para_archivo(expedicion: ExpedicionDeca, config: Co
 
 def asignar_numero_interno_si_procede(expedicion: ExpedicionDeca, config: ConfiguracionDeca | None = None) -> ExpedicionDeca:
     """Llamar UNA VEZ, al Generar (nunca antes: un borrador que se acaba
-    borrando no debe "quemar" un número). Si la empresa prefiere el contador
-    automático y esta expedición todavía no tiene `numero_interno`, lo asigna
-    incrementando `ConfiguracionDeca.ultimo_numero_automatico`. En cualquier
-    otro caso no hace nada -- asignar un número automático a una empresa que
-    no lo pidió sería numerar de más sin necesidad."""
-    if config is None:
-        config = obtener_configuracion(expedicion)
-    if not config or config.identificador_preferido != IdentificadorExpedicionDeca.AUTOMATICO:
-        return expedicion
-    if expedicion.numero_interno:
-        return expedicion
-
-    # Contador por empresa: se incrementa y se guarda, y el número final es
-    # prefijo + contador con 5 cifras (p. ej. "DECA00042").
-    # select_for_update bloquea la fila de configuración hasta que acaba la
-    # transacción: si dos usuarios generan a la vez, el segundo espera y lee
-    # el contador ya incrementado (antes ambos leían el mismo valor y salían
-    # dos expediciones con el mismo número). La expedición también se relee
-    # bloqueada por si otra petición ya le asignó número mientras tanto.
-    with transaction.atomic():
-        config = ConfiguracionDeca.objects.select_for_update().get(pk=config.pk)
-        actual = ExpedicionDeca.objects.select_for_update().only('numero_interno').get(pk=expedicion.pk)
-        if actual.numero_interno:
-            expedicion.numero_interno = actual.numero_interno
-            return expedicion
-        config.ultimo_numero_automatico += 1
-        config.save(update_fields=['ultimo_numero_automatico', 'fecha_actualizacion'])
-        expedicion.numero_interno = f'{config.prefijo_numero_automatico}{config.ultimo_numero_automatico:05d}'
-        expedicion.save(update_fields=['numero_interno', 'fecha_actualizacion'])
-    return expedicion
+    borrando no debe "quemar" un número). Desde v4.56.0 TODO DeCA recibe el
+    siguiente número de su serie, tenga o no albarán: la numeración por
+    actividad queda completa. Qué número se enseña al cliente lo sigue
+    decidiendo `identificador_preferido`. `config` se acepta por
+    compatibilidad con los llamadores; ya no hace falta."""
+    from . import series_service
+    return series_service.asignar_numero(expedicion)

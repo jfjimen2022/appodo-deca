@@ -15,7 +15,7 @@
     "col_matricula": "Plate",
     "col_fecha_transporte": "Transport date",
     "col_acceso_publico": "Public access",
-    "col_creado_por": "Created by",
+    "col_creado_por": "User",
     "col_referencia_externa": "ERP ref.",
     "creado_por_erp": "ERP ({{nombre}})",
     "col_acciones": "Actions",
@@ -56,14 +56,16 @@
     "btn_copiar_enlace": "Copy public link",
     "enlace_copiado": "Link copied.",
     "btn_enviar_email": "Send by email",
-    "estado_papel": "Paper DeCA",
-    "filtro_papel": "Paper DeCA",
     "filtro_origen_erp": "Received from the ERP",
-    "filtro_origen_appodo": "Created in Appodo",
+    "filtro_origen_appodo": "Created manually (not from the ERP)",
     "filtro_modificado_erp": "Changed in the ERP",
     "filtro_incompletas": "Missing some data",
+    "filtro_mias": "Created by me",
+    "filtro_todas": "All (every user)",
     "pagina_anterior": "Previous page",
-    "pagina_siguiente": "Next page"
+    "pagina_siguiente": "Next page",
+    "col_numero_deca": "DeCA no.",
+    "filtro_serie": "Series {{nombre}}"
   },
   "dashboard": {
     "title": "DeCA",
@@ -332,7 +334,12 @@
     "placeholder_autorizacion_especial": "Only for special transport",
     "ayuda_naturaleza": "What the goods are, in plain words: the product name is fine (\"Hass avocado in 4 kg boxes\"). No item codes, internal references or batch numbers, and nothing as generic as \"Goods\" or \"Various\". For dangerous goods (ADR), their official name and UN number.",
     "agenda_manda_titulo": "Data taken from your address book (the address book takes priority over what was read):",
-    "nifs_por_orden": "Tax IDs the reading found without knowing whose they are, distributed in order of appearance; check them:"
+    "nifs_por_orden": "Tax IDs the reading found without knowing whose they are, distributed in order of appearance; check them:",
+    "bloque_sigpac": "SIGPAC data",
+    "bloque_sigpac_desc": "Optional: plot the goods come from. If left blank, it does not appear in the PDF.",
+    "label_sigpac_poligono": "Polygon",
+    "label_sigpac_parcela": "Plot",
+    "label_sigpac_recinto": "Enclosure"
   },
   "documentos": {
     "title": "Source documents",
@@ -361,8 +368,7 @@
     "estado_descripcion_borrador": "Incomplete or pending data review",
     "estado_descripcion_confirmada": "Complete and validated data",
     "estado_descripcion_generada": "DeCA generated and available",
-    "estado_descripcion_anulada": "Shipment cancelled",
-    "papel": "Paper DeCA"
+    "estado_descripcion_anulada": "Shipment cancelled"
   },
   "tipos": {
     "alb_venta": "Sales delivery note",
@@ -445,7 +451,7 @@
     "seccion_documentos": "Source documents",
     "sin_documentos": "No source documents attached.",
     "btn_adjuntar": "Attach document",
-    "adjuntar_ayuda": "You can keep attaching documents (for example, the signed CMR). They don't change the DeCA or its QR, and can't be removed afterwards.",
+    "adjuntar_ayuda": "You can keep attaching documents (for example, the signed CMR or the paper booklet sheet). They don't change the DeCA or its QR, and can't be removed later.",
     "adjunto_ok_one": "Document attached.",
     "adjunto_ok_other": "{{count}} documents attached.",
     "adjunto_error": "Could not attach the document.",
@@ -487,7 +493,7 @@
     "email_error_enviar": "Could not send the email.",
     "email_enviando": "Sending...",
     "email_btn_enviar": "Send",
-    "evento_registrada_papel": "Registered as paper DeCA"
+    "label_sigpac": "SIGPAC data (polygon / plot / enclosure)"
   },
   "configuracion": {
     "title": "DeCA configuration",
@@ -567,21 +573,19 @@
     "label_preparado_por": "Prepared by",
     "label_autorizado_por": "Authorized by",
     "tarjeta_identificador": "Shipment reference",
-    "tarjeta_identificador_desc": "Which number identifies a shipment for the customer: in the email subject, the PDF file name and the audit history. If the chosen field is empty on a given shipment, the next available one is used (waybill → CMR → automatic counter) — it's never left blank.",
+    "tarjeta_identificador_desc": "Which number identifies a shipment for the customer: in the email subject, the PDF file name and the audit history. If the chosen field is empty on a given shipment, the next available one is used (waybill → CMR → series number) — it's never left blank.",
     "label_identificador_preferido": "Preferred reference",
     "identificador_albaran": "Delivery note number",
     "identificador_cmr": "CMR number",
-    "identificador_automatico": "Appodo automatic counter",
-    "label_prefijo_automatico": "Prefix",
-    "label_ultimo_numero": "Last number issued",
-    "ayuda_identificador_automatico": "The automatic counter only numbers when Generating the DeCA (never in Draft), and only when the shipment doesn't already have its own delivery note or CMR number.",
+    "identificador_automatico": "Series number (Appodo)",
     "tarjeta_plantilla_email": "Sending email template",
     "tarjeta_plantilla_email_desc": "Optional: customize the subject and message the DeCA is sent with by email. Empty = the standard Appodo message is used (subject = shipment reference, as chosen in General → \"Shipment reference\").",
     "label_plantilla_asunto": "Default subject (reference)",
     "plantilla_asunto_placeholder": "{identificador}",
     "label_plantilla_cuerpo": "Default message",
     "plantilla_cuerpo_placeholder": "Attached is the DeCA for shipment {identificador}...",
-    "plantilla_email_placeholders": "Available placeholders: {identificador} (as chosen under \"Shipment reference\") {numero_albaran} {origen} {destino} {matricula_tractor} {empresa}."
+    "plantilla_email_placeholders": "Available placeholders: {identificador} (as chosen under \"Shipment reference\") {numero_albaran} {origen} {destino} {matricula_tractor} {empresa}.",
+    "ayuda_identificador_serie": "Every DeCA gets its series number when generated (see \"Numbering series\"). Here you choose which number the customer sees; if a shipment has no delivery note or CMR, the series number is shown."
   },
   "agenda": {
     "title": "Directory",
@@ -837,7 +841,15 @@
     "camion_sin_remolque": "No trailer (rigid truck or van)",
     "sin_remolque_valor": "No trailer (rigid truck or van)",
     "si_lleva_remolque": "It has one",
-    "ejemplo_naturaleza_mercancia": "What the goods are, with their common name: \"Hass avocado in 4 kg boxes\" or, if several, \"Fresh fruit: avocado and mango\". No item codes, references or batch numbers."
+    "ejemplo_naturaleza_mercancia": "What the goods are, with their common name: \"Hass avocado in 4 kg boxes\" or, if several, \"Fresh fruit: avocado and mango\". No item codes, references or batch numbers.",
+    "grupo_sigpac": "SIGPAC data",
+    "campo_sigpac_poligono": "Polygon (SIGPAC)",
+    "campo_sigpac_parcela": "Plot (SIGPAC)",
+    "campo_sigpac_recinto": "Enclosure (SIGPAC)",
+    "como_empezar": "How do you want to do it?",
+    "rellenar_a_mano_desc": "Type it in or pick from the address book",
+    "subir_archivo_desc": "A file already on your phone. The app reads the data",
+    "foto_albaran_desc": "or the CMR, with the camera. The app reads the data"
   },
   "sinonimos": {
     "tab": "Learned aliases",
@@ -994,7 +1006,7 @@
     "listo_titulo": "DeCA ready to print",
     "listo_desc": "Reference {{referencia}}. Print the copies: the carrier copy travels in the truck. The QR is already printed and will lead to the DeCA in Appodo once the signal comes back and it is registered.",
     "imprimir": "Print",
-    "imprimir_ayuda": "Use the site printer (wifi or bluetooth) or \"Save as PDF\" to send it to the driver later.",
+    "imprimir_ayuda": "Use the printer at the site office (wifi or bluetooth). If nothing happens when you tap Print, or there is no printer, use the button below.",
     "volver_lista": "Back to Shipments",
     "pendientes_one": "{{count}} DeCA made offline waiting to be registered in Appodo",
     "pendientes_other": "{{count}} DeCAs made offline waiting to be registered in Appodo",
@@ -1038,8 +1050,15 @@
       "pie": "DeCA issued offline. It must travel on board during transport (art. 3) and be kept for one year (art. 9).",
       "copia_destinatario": "Consignee copy",
       "qr": "DeCA QR code",
-      "qr_explicacion": "DeCA QR: it leads to the document in Appodo as soon as the phone that issued it gets signal again."
-    }
+      "qr_explicacion": "DeCA QR: it leads to the document in Appodo as soon as the phone that issued it gets signal again.",
+      "sigpac": "SIGPAC (polygon / plot / enclosure)"
+    },
+    "pdf_boton": "Save or share PDF",
+    "pdf_generando": "Generating PDF...",
+    "pdf_ayuda": "Creates the PDF on the phone, offline: save it, send it by WhatsApp or email, or let the haulier take a photo.",
+    "pdf_compartido": "PDF ready.",
+    "pdf_descargado": "PDF saved to Downloads.",
+    "pdf_error": "Could not create the PDF. Take a photo of this screen meanwhile."
   },
   "campo": {
     "cfg_titulo": "Field work and no signal",
@@ -1059,8 +1078,6 @@
     "ejemplares_3": "3 — carrier, shipper and consignee",
     "cfg_ejemplares_desc": "How many copies are printed offline. The carrier copy travels in the truck (always printed); the others have signature boxes for whoever keeps them.",
     "cfg_ejemplares_solo_imprimir": "Only used with \"Print on the phone\".",
-    "cfg_papel": "Register paper DeCAs by photo",
-    "cfg_papel_desc": "If someone fills in a DeCA by hand on the paper pad, a photo is taken later and it is registered in Appodo as a \"Paper DeCA\", with the same mandatory data, to keep a record. Careful: from 5 October 2026 a handwritten DeCA is NOT a valid DeCA (the regulation requires a native PDF with QR, does not accept scans and disregards handwritten notes): registering it here keeps an internal record, it does not make it valid. Needs signal to upload the photo.",
     "cfg_anticipado": "Advance DeCA (estimated weight)",
     "cfg_anticipado_desc": "Lets you prepare and generate the DeCA at the office before the truck arrives, marking the weight as estimated (\"Estimated weight\" in the form; the PDF shows \"(estimado)\"). The real weight is entered later within the hours allowed to correct a generated DeCA.",
     "cfg_anticipado_legal": "Careful: the regulation requires the weight of what is transported (art. 6.d). The real weight must be entered BEFORE the truck leaves, and the paper or QR the driver carries must be the corrected one. If you cannot ensure that, keep it off.",
@@ -1085,20 +1102,12 @@
     "guardado_para_luego_titulo": "DeCA saved on the phone",
     "guardado_para_luego_desc": "Reference {{referencia}}. It will be generated with its QR as soon as the signal comes back; you will see it in Shipments.",
     "guardado_para_luego_aviso": "Until it is generated there is no DeCA. If the truck has to leave now, use the paper pad.",
-    "movil_registrar_papel": "Register a paper DeCA (pad)",
-    "movil_papel_banner": "Registering a paper DeCA: copy the data exactly as on the paper. No QR is generated; the photo is kept as the copy.",
-    "btn_registrar_papel": "Register as paper DeCA",
-    "papel_registrado_ok": "Paper DeCA registered",
-    "papel_falta_foto": "The photo of the paper DeCA is missing: it is the copy of the document that travelled.",
-    "papel_necesita_red": "Registering a paper DeCA needs signal to upload the photo.",
-    "papel_error": "The paper DeCA could not be registered.",
     "peso_estimado": "Estimated weight (enter the real one before the truck leaves)",
     "estimado": "estimated",
     "movil_peso_es_estimado": "The weight is estimated",
     "movil_peso_estimado_valor": "Estimated weight",
     "movil_peso_real": "It is the real one now",
     "detalle_peso_estimado": "Estimated weight: correct it with the real weight (Correct data) before the truck leaves, and make sure the driver carries the corrected DeCA.",
-    "detalle_papel": "Paper DeCA: filled in on the paper pad and registered later with its photo. It has no Appodo PDF or QR.",
     "listo_sin_cobertura": "Ready to work without signal · address book from {{fecha}}",
     "preparando": "Preparing the phone to work without signal…",
     "no_preparado_sin_red": "This phone has no saved address book: without signal you will have to type everything. Next time, just open Appodo with signal before leaving.",
@@ -1165,5 +1174,28 @@
     "leyenda_matriculas": "Plates: current Spanish plates, trailer plates with the leading R (R1234BCD), old provincial plates (CA1234AB) and foreign plates are all valid. If a handwritten plate looks like one in the address book, the address-book one is proposed.",
     "leyenda_naturaleza": "Nature of the goods: the reading writes what the goods are in plain words (the product name is fine), without item codes, references or batch numbers (Orden FOM/2861/2012 art. 6.d; CMR Convention art. 6: \"usual description\").",
     "aviso_varios": "The same name has several tax IDs in your address book (duplicate or test records): Appodo does not pick one blindly, it warns and asks you to keep only the right one in the address book."
+  },
+  "series": {
+    "titulo": "Numbering series",
+    "serie": "Series",
+    "elegir": "Choose series",
+    "por_defecto": "default",
+    "numero_deca": "DeCA no.",
+    "desc": "Every DeCA gets the next number of its series when generated, with or without a delivery note. Create one series per activity (e.g. Cotton, Tomatoes) to number them separately. New DeCAs use the default series unless another one is chosen.",
+    "error_cargar": "Could not load the series.",
+    "error_guardar": "Could not save the series.",
+    "guardada": "Series saved.",
+    "creada": "Series created.",
+    "col_nombre": "Activity",
+    "col_prefijo": "Prefix",
+    "col_digitos": "Digits",
+    "col_siguiente": "Next number",
+    "col_defecto": "Default",
+    "col_activa": "Active",
+    "ph_nombre": "New activity",
+    "btn_anadir": "Add series",
+    "ayuda": "The number is set when the DeCA is generated (a deleted draft uses no number) and never changes, even after a correction. A series that has been used is not deleted: it is deactivated.",
+    "aviso_sin_albaran": "This DeCA has no delivery note or CMR number: its reference will be the number of series {{serie}}. If it has a delivery note, cancel and enter it before generating.",
+    "aviso_sin_albaran_movil": "No delivery note or CMR number: its reference will be the series number. If it has one, tap \"Not yet\" and enter it."
   }
 }

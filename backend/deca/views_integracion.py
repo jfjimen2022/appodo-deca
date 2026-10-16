@@ -47,7 +47,7 @@ CAMPOS_INTEGRACION = [c for c in CAMPOS_AUDITABLES_EXPEDICION if c != 'peso_esti
 
 _ESTADOS_ACTUALIZABLES = (ExpedicionDeca.Estado.BORRADOR, ExpedicionDeca.Estado.CONFIRMADO)
 # Ya hay un documento que viaja con el camión: si el ERP cambia, se avisa.
-_ESTADOS_CON_DOCUMENTO = (ExpedicionDeca.Estado.GENERADO, ExpedicionDeca.Estado.PAPEL)
+_ESTADOS_CON_DOCUMENTO = (ExpedicionDeca.Estado.GENERADO,)
 _VERDADERO = (True, 'true', 'True', '1', 1)
 # Hora local de la instalación: la que trae el ERP en sus fechas.
 _ZONA = ZoneInfo(settings.TIME_ZONE or 'Europe/Madrid')
@@ -104,8 +104,8 @@ class DecaIntegracionThrottle(SimpleRateThrottle):
 # ─── Ingesta ────────────────────────────────────────────────────────────────
 
 def _anotar_cambios_erp(request, expedicion: ExpedicionDeca, datos: dict, clave) -> None:
-    """El ERP reenvía un envío cuyo DeCA ya existe como documento (generado o
-    en papel). No se cambia el DeCA: se guarda qué es distinto para que la
+    """El ERP reenvía un envío cuyo DeCA ya existe como documento
+    (generado). No se cambia el DeCA: se guarda qué es distinto para que la
     pantalla lo marque en rojo y una persona decida (corregir o anular).
 
     Solo cuenta lo que el ERP manda con valor: un dato que el ERP no tiene
@@ -139,7 +139,7 @@ def _anotar_cambios_erp(request, expedicion: ExpedicionDeca, datos: dict, clave)
         return  # ya avisado (el conector reenvía cada poco)
     if diferencias and _sin_valor(diferencias) == _sin_valor(expedicion.cambios_erp_descartados):
         return  # alguien ya lo revisó y lo dejó así
-    # Fuera del plazo de corrección (o en papel) el DeCA ya no puede cambiar:
+    # Fuera del plazo de corrección el DeCA ya no puede cambiar:
     # no se abre un aviso nuevo (decisión del usuario 2026-10-14). Uno que ya
     # estuviera abierto se queda para que alguien lo resuelva, y se sigue
     # quitando solo si el ERP vuelve a coincidir.
@@ -166,8 +166,7 @@ def _albaran_normalizado(texto) -> str:
 def _hecha_a_mano(numero_albaran):
     """DeCA del mismo albarán que alguien hizo a mano (no llegó del ERP).
     Caso típico: logística ya los hacía a mano y al conectar el ERP salían
-    duplicados. Si hay varios, manda el que ya es documento (generado o en
-    papel) y, entre iguales, el más reciente."""
+    duplicados. Si hay varios, manda el que ya es documento (generado) y, entre iguales, el más reciente."""
     buscado = _albaran_normalizado(numero_albaran)
     numeros = re.findall(r'\d+', buscado)
     if not numeros:
@@ -238,7 +237,7 @@ class IngestaExpedicionDecaView(APIView):
       la pantalla. Nunca se inventa un dato.
     - Llega otra vez y sigue en borrador: se actualiza con los datos nuevos y
       se vuelve a intentar generar (el ERP ya tiene, p. ej., la matrícula).
-    - Llega otra vez y ya está generado, anulado o en papel: no se toca y se
+    - Llega otra vez y ya está generado o anulado: no se toca y se
       devuelve tal cual (`ya_existia: true`). Corregir un DeCA generado es
       una decisión de una persona aquí, con su motivo.
 

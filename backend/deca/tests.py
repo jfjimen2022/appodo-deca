@@ -1632,12 +1632,14 @@ class IdentificadorExpedicionDecaTests(APITestCase):
         segunda.refresh_from_db()
         self.assertEqual(segunda.numero_interno, 'DECA-00002')
 
-    def test_generar_no_asigna_numero_automatico_si_la_empresa_no_lo_prefiere(self):
-        # Por defecto (identificador_preferido='numero_albaran') -- no debe
-        # numerar de más sin que la empresa lo haya pedido.
+    def test_generar_numera_en_la_serie_aunque_la_referencia_sea_el_albaran(self):
+        # Desde v4.56.0 todo DeCA lleva número de su serie (decisión del
+        # usuario 2026-10-15); de cara al cliente se sigue viendo el albarán.
+        from .services import identificador_service
         expedicion = self._crear_confirmar_y_generar()
         expedicion.refresh_from_db()
-        self.assertEqual(expedicion.numero_interno, '')
+        self.assertEqual(expedicion.numero_interno, 'DECA-00001')
+        self.assertEqual(identificador_service.identificador_expedicion(expedicion), 'A-000123')
 
     def test_identificador_para_archivo_sanea_barras(self):
         # `numero_albaran` es una referencia externa del cliente y puede
@@ -1890,14 +1892,13 @@ class DecaSinConexionTests(DecaAPITestCase):
 
 class TrabajoCampoDecaTests(DecaAPITestCase):
     """Opciones de "Trabajo en campo y sin cobertura" de Configuración de DeCA
-    (2026-09-30): modo sin cobertura, ejemplares, talonario de papel por foto,
+    (2026-09-30): modo sin cobertura, ejemplares,
     DeCA anticipado y aviso de DeCA sin completar."""
 
     def test_valores_por_defecto(self):
         datos = self.client.get('/api/v1/deca/configuracion/').data
         self.assertEqual(datos['modo_sin_cobertura'], 'imprimir')
         self.assertEqual(datos['ejemplares_sin_cobertura'], 2)
-        self.assertFalse(datos['registrar_papel_por_foto'])
         self.assertFalse(datos['deca_anticipado'])
         self.assertTrue(datos['aviso_sin_completar'])
         self.assertEqual(datos['aviso_sin_completar_dias'], 2)
@@ -1932,45 +1933,14 @@ class TrabajoCampoDecaTests(DecaAPITestCase):
         texto = ''.join(p.extract_text() for p in PdfReader(io.BytesIO(b''.join(previa.streaming_content))).pages)
         self.assertIn('(estimado)', texto)
 
-    def _con_foto(self):
+    def test_ya_no_hay_deca_en_papel(self):
+        # Quitado en v4.57.0 (decisión del usuario 2026-10-15): la hoja del
+        # talonario se adjunta a la ficha del DeCA con «Adjuntar documento».
+        self.assertNotIn('registrar_papel_por_foto', self.client.get('/api/v1/deca/configuracion/').data)
         crear = self.client.post('/api/v1/deca/expediciones/', self._datos_expedicion_validos(), format='json')
-        self.client.post(
-            f'/api/v1/deca/expediciones/{crear.data["id"]}/documentos/',
-            {'tipo_documento': 'otro', 'archivo': self._pdf_con_texto('DeCA talonario', 'talonario.pdf')},
-            format='multipart',
-        )
-        return crear.data['id']
-
-    def test_registrar_papel_solo_si_la_empresa_lo_activa(self):
-        exp_id = self._con_foto()
-        r = self.client.post(f'/api/v1/deca/expediciones/{exp_id}/registrar-papel/')
-        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
-
-    def test_registrar_papel_exige_foto_y_queda_inmutable(self):
-        ConfiguracionDeca.objects.create(registrar_papel_por_foto=True)
-        sin_foto = self.client.post('/api/v1/deca/expediciones/', self._datos_expedicion_validos(), format='json')
-        r = self.client.post(f'/api/v1/deca/expediciones/{sin_foto.data["id"]}/registrar-papel/')
-        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
-
-        exp_id = self._con_foto()
-        r = self.client.post(f'/api/v1/deca/expediciones/{exp_id}/registrar-papel/')
-        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
-        self.assertEqual(r.data['estado'], 'papel')
-        self.assertFalse(r.data['puede_editar'])
-        self.assertFalse(r.data['tiene_pdf_generado'])
-        editar = self.client.patch(f'/api/v1/deca/expediciones/{exp_id}/', {'origen': 'Otro'}, format='json')
-        self.assertEqual(editar.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertTrue(EventoExpedicionDeca.objects.filter(
-            expedicion_id=exp_id, tipo_evento=EventoExpedicionDeca.TipoEvento.REGISTRADA_PAPEL,
-        ).exists())
-
-    def test_registrar_papel_exige_los_datos_obligatorios(self):
-        ConfiguracionDeca.objects.create(registrar_papel_por_foto=True)
-        exp_id = self._con_foto()
-        ExpedicionDeca.objects.filter(id=exp_id).update(domicilio_cargador='')
-        r = self.client.post(f'/api/v1/deca/expediciones/{exp_id}/registrar-papel/')
-        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('domicilio_cargador', r.data['campos_faltantes'])
+        r = self.client.post(f'/api/v1/deca/expediciones/{crear.data["id"]}/registrar-papel/')
+        self.assertEqual(r.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertNotIn('papel', [v for v, _ in ExpedicionDeca.Estado.choices])
 
     def _sin_completar(self, dias, **extra):
         from datetime import timedelta

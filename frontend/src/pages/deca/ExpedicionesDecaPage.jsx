@@ -40,8 +40,6 @@ const ESTADO_BADGE = {
   confirmado: { variant: 'default' },
   generado: { variant: 'success' },
   anulado: { variant: 'destructive' },
-  // DeCA del talonario de papel registrado con su foto (sin PDF ni QR).
-  papel: { variant: 'outline' },
 }
 
 function formatFechaHora(value, locale) {
@@ -64,18 +62,32 @@ export default function ExpedicionesDecaPage() {
   const navigate = useNavigate()
   const locale = i18n.language === 'en' ? 'en-GB' : 'es-ES'
 
+  // Series de numeración, para el filtro por serie.
+  const [series, setSeries] = useState([])
+  useEffect(() => {
+    decaService.listarSeries().then(({ data }) => setSeries((data.results ?? data).filter((x) => x.activa || x.ultimo_numero))).catch(() => {})
+  }, [])
+
   const DECA_SEARCH_CONFIG = {
+    // Filtros del mismo `field` se excluyen entre sí (ver handleSearch): la
+    // API solo admite un valor por parámetro. 'todas' no filtra nada; existe
+    // para poder quitar el 'mias' por defecto y que se recuerde la elección.
     filters: [
+      { id: 'mias', label: t('lista.filtro_mias'), field: 'creado_por', value: 'yo' },
+      { id: 'todas', label: t('lista.filtro_todas'), field: 'creado_por', value: null },
       { id: 'estado_borrador', label: t('lista.filtro_borrador'), field: 'estado', value: 'borrador' },
       { id: 'estado_confirmado', label: t('lista.filtro_confirmado'), field: 'estado', value: 'confirmado' },
       { id: 'estado_generado', label: t('lista.filtro_generado'), field: 'estado', value: 'generado' },
       { id: 'estado_anulado', label: t('lista.filtro_anulado'), field: 'estado', value: 'anulado' },
-      { id: 'estado_papel', label: t('lista.filtro_papel'), field: 'estado', value: 'papel' },
       // Integración con el ERP: de dónde viene y qué revisar.
       { id: 'origen_erp', label: t('lista.filtro_origen_erp'), field: 'origen', value: 'erp' },
       { id: 'origen_appodo', label: t('lista.filtro_origen_appodo'), field: 'origen', value: 'appodo' },
       { id: 'modificado_erp', label: t('lista.filtro_modificado_erp'), field: 'modificado_erp', value: 'true' },
       { id: 'incompletas', label: t('lista.filtro_incompletas'), field: 'incompletas', value: 'true' },
+      // Una por serie de numeración (actividad), solo si hay más de una.
+      ...(series.length > 1 ? series.map((serie) => (
+        { id: `serie_${serie.id}`, label: t('lista.filtro_serie', { nombre: serie.nombre }), field: 'serie', value: serie.id }
+      )) : []),
     ],
   }
 
@@ -83,6 +95,8 @@ export default function ExpedicionesDecaPage() {
   // acciones se quedan fijas, fuera del picker.
   const COLUMNAS_CONFIG = [
     { id: 'estado', labelKey: 'col_estado', defaultVisible: true, sortField: 'estado' },
+    // Nº del DeCA en su serie (todo DeCA generado desde v4.56.0 lo lleva).
+    { id: 'numero_interno', labelKey: 'col_numero_deca', defaultVisible: true, sortField: 'numero_interno' },
     { id: 'nombre_cargador', labelKey: 'col_cargador', defaultVisible: true, sortField: 'nombre_cargador' },
     { id: 'nombre_transportista', labelKey: 'col_transportista', defaultVisible: true, sortField: 'nombre_transportista' },
     { id: 'nombre_destinatario', labelKey: 'col_destinatario', defaultVisible: true, sortField: 'nombre_destinatario' },
@@ -92,7 +106,7 @@ export default function ExpedicionesDecaPage() {
     // backend (calculados, no columnas reales de BD) -- no ordenables sin
     // anotar la query.
     { id: 'acceso_publico', labelKey: 'col_acceso_publico', defaultVisible: true, numeric: true },
-    { id: 'creado_por', labelKey: 'col_creado_por', defaultVisible: false },
+    { id: 'creado_por', labelKey: 'col_creado_por', defaultVisible: true },
     // Referencia del envío en el ERP (solo los recibidos por la integración).
     { id: 'referencia_externa', labelKey: 'col_referencia_externa', defaultVisible: false, sortField: 'referencia_externa' },
   ]
@@ -101,7 +115,9 @@ export default function ExpedicionesDecaPage() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const [searchState, setSearchState] = useState({ search: '', filters: [], group: null, customFilters: [] })
+  // Por defecto cada usuario ve las suyas; SmartSearch restaura después el
+  // último filtro que dejó puesto (p. ej. «Todas»).
+  const [searchState, setSearchState] = useState({ search: '', filters: ['mias'], group: null, customFilters: [] })
   const [ordering, setOrdering] = useState({ field: 'fecha_hora_transporte', dir: 'desc' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -134,10 +150,12 @@ export default function ExpedicionesDecaPage() {
     if (searchState.search) params.q = searchState.search
     searchState.filters.forEach((fid) => {
       const f = DECA_SEARCH_CONFIG.filters.find((x) => x.id === fid)
-      if (f) params[f.field] = f.value
+      if (f?.value) params[f.field] = f.value
     })
     return params
-  }, [searchState])
+    // `series`: un filtro de serie restaurado antes de cargar las series se aplica al llegar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchState, series])
 
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null)
   const [refrescando, setRefrescando] = useState(false)
@@ -188,7 +206,15 @@ export default function ExpedicionesDecaPage() {
 
   useEffect(() => { setPage(1) }, [searchState])
 
-  const handleSearch = (newSearchState) => setSearchState(newSearchState)
+  // Al marcar un filtro se desmarcan los de su mismo campo (dos estados a la
+  // vez no se pueden pedir: antes ganaba el último en silencio).
+  const handleSearch = (newSearchState) => {
+    const nuevos = newSearchState.filters.filter((id) => !searchState.filters.includes(id))
+    const campoDe = (id) => DECA_SEARCH_CONFIG.filters.find((x) => x.id === id)?.field
+    const filters = newSearchState.filters.filter((id) =>
+      nuevos.includes(id) || !nuevos.some((n) => campoDe(n) === campoDe(id)))
+    setSearchState({ ...newSearchState, filters })
+  }
 
   const handleSort = (field) => {
     setOrdering((prev) => prev.field === field
@@ -395,11 +421,17 @@ export default function ExpedicionesDecaPage() {
               : <Lock className="h-4 w-4 text-gray-400 mx-auto" />}
           </td>
         )
+      case 'numero_interno':
+        return (
+          <td key={col.id} className="px-4 py-3.5 font-mono text-xs text-gray-600 whitespace-nowrap">{exp.numero_interno || '—'}</td>
+        )
       case 'creado_por':
-        // Lo recibido por la integración no lo creó una persona: se dice de dónde vino.
+        // Lo recibido por la integración no lo creó una persona: el usuario es
+        // quien lo generó; si aún nadie, se dice de qué ERP vino.
         return (
           <td key={col.id} className="px-4 py-3.5 text-gray-500">
-            {exp.creado_por || (exp.recibida_de ? t('lista.creado_por_erp', { nombre: exp.recibida_de }) : '—')}
+            {exp.creado_por || exp.generado_por
+              || (exp.recibida_de ? t('lista.creado_por_erp', { nombre: exp.recibida_de }) : '—')}
           </td>
         )
       case 'referencia_externa':

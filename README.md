@@ -1,7 +1,7 @@
 # Appodo DeCa
 
 [![Licencia: AGPL v3](https://img.shields.io/badge/Licencia-AGPL%20v3-blue.svg)](LICENSE)
-[![Versión](https://img.shields.io/badge/versión-v03.2-informational)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/versión-v03.3-informational)](CHANGELOG.md)
 [![Stack](https://img.shields.io/badge/stack-Django%20%2B%20React-informational)](#stack)
 
 **Appodo DeCa** es una app gratuita, autoalojable (self-hosted) y de código
@@ -53,8 +53,8 @@ CRM, gestión multiempresa...), esa es la versión de pago.
 - **DeCA sin cobertura**: PWA instalable; se rellena y se imprime en el
   móvil con su QR (generado en el propio móvil y adoptado por el servidor),
   y se registra solo al volver la red (Background Sync / Periodic Sync en
-  Android). Modos configurables, ejemplares, registro de DeCA de papel por
-  foto, DeCA anticipado con peso estimado y aviso por email de los que
+  Android). Modos configurables, ejemplares, PDF generado en el propio
+  móvil para compartir, DeCA anticipado con peso estimado y aviso por email de los que
   llegan sin completar.
 - **Verificación pública por QR sin login**, con caducidad configurable
   (mínimo legal 7 días) y registro de cada acceso.
@@ -154,10 +154,10 @@ código bajo la misma licencia.
 
 ## Estado del proyecto
 
-`v03` — sincronizado con el módulo DeCA de Appodo v4.49.3 (incluye la
+`v03.3` — sincronizado con el módulo DeCA de Appodo v4.57.0 (incluye la
 conexión con el ERP de la empresa, ver
 [`docs/INTEGRACION_ERP.md`](docs/INTEGRACION_ERP.md)). Suite de tests del
-backend (611 tests, Python 3.12 como la imagen Docker) y del frontend (77
+backend (627 tests, Python 3.12 como la imagen Docker) y del frontend (84
 tests) en verde. Las capturas de arriba son de `v01`.
 Quedan TODOs explícitos en el código (`TODO(standalone):`, ver
 [`CHANGELOG.md`](CHANGELOG.md)) antes de considerarlo listo para producción

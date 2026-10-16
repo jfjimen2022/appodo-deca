@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Tractor, Printer, Save, WifiOff, FileText, Scale, BellRing, Info, Smartphone, ChevronDown } from 'lucide-react'
+import { Tractor, Printer, Save, WifiOff, Scale, BellRing, Info, Smartphone, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
@@ -169,16 +169,6 @@ export default function TrabajoCampoDeca({ config, set }) {
             <Explicacion>{imprime ? t('campo.cfg_ejemplares_desc') : t('campo.cfg_ejemplares_solo_imprimir')}</Explicacion>
           </CardContent>
         </Card>
-
-        <TarjetaInterruptor
-          id="registrar_papel_por_foto"
-          icono={FileText}
-          titulo={t('campo.cfg_papel')}
-          activo={config.registrar_papel_por_foto}
-          onCambiar={(v) => set('registrar_papel_por_foto', v)}
-        >
-          <Explicacion>{t('campo.cfg_papel_desc')}</Explicacion>
-        </TarjetaInterruptor>
 
         <TarjetaInterruptor
           id="deca_anticipado"

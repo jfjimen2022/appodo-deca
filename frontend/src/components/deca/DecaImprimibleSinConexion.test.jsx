@@ -1,7 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import DecaImprimibleSinConexion from './DecaImprimibleSinConexion'
 import { decaService } from '../../services/decaService'
+
+vi.mock('../../lib/decaPdfSinConexion', () => ({
+  generarPdfSinConexion: vi.fn(() => new Blob(['%PDF'], { type: 'application/pdf' })),
+  svgAPng: vi.fn(async () => 'data:image/png;base64,AAAA'),
+  compartirODescargar: vi.fn(async () => 'compartido'),
+}))
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key) => key }),
@@ -69,5 +75,24 @@ describe('DecaImprimibleSinConexion', () => {
     expect(screen.getByText('campo.guardado_para_luego_aviso')).toBeInTheDocument()
     expect(screen.queryByText('offline.imprimir')).toBeNull()
     expect(screen.queryByText('offline.imp.copia_transportista')).toBeNull()
+  })
+
+  it('si window.print no sirve: el botón de PDF lo genera con los ejemplares y el QR, y lo comparte', async () => {
+    const pdf = await import('../../lib/decaPdfSinConexion')
+    const token = '3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d'
+    render(<DecaImprimibleSinConexion item={{ ...ITEM, token_publico: token }} empresaNombre="Finca Ejemplo" onCerrar={vi.fn()} />)
+    fireEvent.click(screen.getByText('offline.pdf_boton'))
+    await waitFor(() => expect(pdf.compartirODescargar).toHaveBeenCalled())
+    const args = pdf.generarPdfSinConexion.mock.calls[0][0]
+    expect(args.copias).toEqual(['offline.imp.copia_transportista', 'offline.imp.copia_cargador'])
+    expect(args.qrPng).toMatch(/^data:image\/png/)
+    expect(args.urlQr).toBe(decaService.urlDescargaPublica(token))
+    expect(pdf.compartirODescargar.mock.calls[0][1]).toBe('DeCA_OFF-ABC-1234.pdf')
+    expect(await screen.findByText('offline.pdf_compartido')).toBeInTheDocument()
+  })
+
+  it('guardado para generar luego tampoco ofrece PDF', () => {
+    render(<DecaImprimibleSinConexion item={ITEM} empresaNombre="Finca Ejemplo" soloGuardado onCerrar={vi.fn()} />)
+    expect(screen.queryByText('offline.pdf_boton')).toBeNull()
   })
 })

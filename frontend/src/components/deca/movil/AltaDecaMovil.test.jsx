@@ -68,11 +68,20 @@ describe('AltaDecaMovil', () => {
     Element.prototype.scrollIntoView = vi.fn()
   })
 
-  it('en un alta nueva empieza por la cámara, sin ningún campo a la vista', () => {
-    montar({ expedicion: null, empezarEnLista: false, form: {} })
-    expect(screen.getByText('movil.foto_albaran')).toBeInTheDocument()
-    expect(screen.getByText('movil.rellenar_a_mano')).toBeInTheDocument()
+  it('en un alta nueva ofrece tres botones, a mano primero, y ningún campo a la vista', () => {
+    const { props } = montar({ expedicion: null, empezarEnLista: false, form: {} })
+    const botones = ['movil.rellenar_a_mano', 'movil.subir_archivo', 'movil.foto_albaran']
+      .map((clave) => screen.getByText(clave).closest('button'))
+    // Mismo formato y en este orden (decisión del usuario 2026-10-15).
+    botones.forEach((b) => expect(b).toBeInTheDocument())
+    expect(botones[0].compareDocumentPosition(botones[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(botones[1].compareDocumentPosition(botones[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByText('movil.rellenar_a_mano_desc')).toBeInTheDocument()
     expect(screen.queryByText('movil.solo_esto')).not.toBeInTheDocument()
+    // Ya no hay DeCA de papel.
+    expect(screen.queryByText('campo.movil_registrar_papel')).not.toBeInTheDocument()
+    fireEvent.click(botones[0])
+    expect(props.onEmpezarManual).toHaveBeenCalled()
   })
 
   it('tras leer el documento solo pide lo que falta o hay que revisar, y cuenta lo que falta', () => {
@@ -272,24 +281,6 @@ describe('AltaDecaMovil', () => {
     fireEvent.click(screen.getByText('movil.siguiente_comprobar'))
     fireEvent.click(screen.getByText('campo.guardar_para_luego'))
     expect(screen.getByText('campo.guardar_para_luego_desc')).toBeInTheDocument()
-  })
-
-  it('DeCA de papel: se empieza desde el inicio y al final se registra, no se genera', () => {
-    const onEmpezarPapel = vi.fn()
-    const inicio = montar({ empezarEnLista: false, expedicion: null, permitirPapel: true, onEmpezarPapel })
-    fireEvent.click(screen.getByText('campo.movil_registrar_papel'))
-    expect(onEmpezarPapel).toHaveBeenCalled()
-    inicio.unmount()
-
-    const { props } = montar({
-      form: { ...LEIDO, matricula_tractor: '4821LKP', fecha_hora_transporte: '2026-09-27T07:45' },
-      camposRevisar: [], modoPapel: true, onRegistrarPapel: vi.fn(),
-    })
-    expect(screen.getByText('campo.movil_papel_banner')).toBeInTheDocument()
-    fireEvent.click(screen.getByText('movil.siguiente_comprobar'))
-    fireEvent.click(screen.getByText('campo.btn_registrar_papel'))
-    expect(props.onRegistrarPapel).toHaveBeenCalled()
-    expect(props.onGenerar).not.toHaveBeenCalled()
   })
 
   it('peso estimado solo aparece si la empresa usa DeCA anticipado', () => {

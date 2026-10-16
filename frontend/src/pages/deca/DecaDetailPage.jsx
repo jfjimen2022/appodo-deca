@@ -1,4 +1,4 @@
-// Ficha de un DeCA generado, anulado o en papel: datos en solo lectura, QR y
+// Ficha de un DeCA generado o anulado: datos en solo lectura, QR y
 // enlace público, descarga del PDF, envío por email, corrección dentro del
 // plazo (con motivo obligatorio, Resolución de 5-jun-2026), anulación con
 // motivo e historial de auditoría exportable. Un borrador o una expedición
@@ -32,7 +32,6 @@ const ESTADO_BADGE = {
   confirmado: 'default',
   generado: 'success',
   anulado: 'destructive',
-  papel: 'outline',
 }
 
 const TIPO_EVENTO_KEY = {
@@ -43,7 +42,6 @@ const TIPO_EVENTO_KEY = {
   generada: 'evento_generada',
   descarga_publica: 'evento_descarga_publica',
   anulada: 'evento_anulada',
-  registrada_papel: 'evento_registrada_papel',
 }
 
 function Campo({ label, value }) {
@@ -316,11 +314,6 @@ export default function DecaDetailPage() {
           </div>
         </div>
       )}
-      {expedicion.estado === 'papel' && (
-        <div role="status" className="rounded-lg border-2 border-gray-300 bg-white p-3 text-sm font-semibold text-gray-900">
-          {t('campo.detalle_papel')}
-        </div>
-      )}
 
       {expedicion.estado === 'generado' && urlPublica && (
         <div className="md:hidden flex flex-col gap-3.5 text-[#111]">
@@ -384,6 +377,12 @@ export default function DecaDetailPage() {
               <Campo label={t('detalle.label_origen')} value={expedicion.origen} />
               <Campo label={t('detalle.label_destino')} value={expedicion.destino} />
               <Campo label={t('detalle.label_fecha_transporte')} value={formatearFecha(expedicion.fecha_hora_transporte)} />
+              {(expedicion.sigpac_poligono || expedicion.sigpac_parcela || expedicion.sigpac_recinto) && (
+                <Campo
+                  label={t('detalle.label_sigpac', 'Datos SIGPAC (polígono / parcela / recinto)')}
+                  value={[expedicion.sigpac_poligono, expedicion.sigpac_parcela, expedicion.sigpac_recinto].map((v) => v || '—').join(' / ')}
+                />
+              )}
             </CardContent>
           </Card>
 
@@ -515,7 +514,7 @@ export default function DecaDetailPage() {
                 <CardTitle className="text-base flex items-center gap-2">
                   <FileText className="h-4 w-4 text-[var(--color-marca)]" /> {t('detalle.seccion_documentos')}
                 </CardTitle>
-                {(expedicion.estado === 'generado' || expedicion.estado === 'papel') && (
+                {expedicion.estado === 'generado' && (
                   <>
                     <input
                       ref={inputAdjuntoRef}
@@ -536,9 +535,9 @@ export default function DecaDetailPage() {
                   </>
                 )}
               </div>
-              {(expedicion.estado === 'generado' || expedicion.estado === 'papel') && (
+              {expedicion.estado === 'generado' && (
                 <CardDescription>
-                  {t('detalle.adjuntar_ayuda', 'Puedes seguir adjuntando documentos (por ejemplo, el CMR firmado). No cambian el DeCA ni su QR, y no se pueden quitar después.')}
+                  {t('detalle.adjuntar_ayuda', 'Puedes seguir adjuntando documentos (por ejemplo, el CMR firmado o la hoja del talonario). No cambian el DeCA ni su QR, y no se pueden quitar después.')}
                 </CardDescription>
               )}
             </CardHeader>

@@ -10,6 +10,7 @@ import {
   WifiOff, Printer, Save, Download,
 } from 'lucide-react'
 import { puedeInstalar, alCambiarInstalable, instalar } from '../../../lib/instalarApp'
+import SelectorSerieDeca from '../SelectorSerieDeca'
 
 // Alta de DeCA en MÓVIL -- rediseño "Cámara + lista" con la pantalla de
 // comprobación final del modelo "Asistente por pasos" (elegido entre tres
@@ -52,6 +53,9 @@ const CAMPOS = {
   nif_cargador: { mono: true, mayus: true, agenda: 'cargadores' },
   domicilio_cargador: {},
   autorizacion_especial: { mono: true },
+  sigpac_poligono: { mono: true, inputMode: 'numeric' },
+  sigpac_parcela: { mono: true, inputMode: 'numeric' },
+  sigpac_recinto: { mono: true, inputMode: 'numeric' },
   nombre_transportista: { agenda: 'transportistas' },
   nif_transportista: { mono: true, mayus: true, agenda: 'transportistas' },
   nombre_destinatario: { agenda: 'destinatarios' },
@@ -93,6 +97,8 @@ const GRUPOS_OPCIONALES = [
   { id: 'carga', campos: ['peso_bruto_kg', 'bultos_palets', 'bultos', 'volumen_m3', 'codigo_mercancia'] },
   { id: 'conductor', campos: ['nombre_conductor', 'nif_conductor', 'telefono_conductor', 'email_conductor'] },
   { id: 'documento', campos: ['numero_albaran', 'numero_cmr'] },
+  // Parcela de origen (SIGPAC), igual que en escritorio: antes de las instrucciones.
+  { id: 'sigpac', campos: ['sigpac_poligono', 'sigpac_parcela', 'sigpac_recinto'] },
   { id: 'instrucciones', campos: ['instrucciones_conductor', 'contacto_emergencias', 'tipo_contenedor', 'instrucciones_expedidor', 'instrucciones_pago', 'comentarios'] },
 ]
 
@@ -151,6 +157,28 @@ function Boton({ variante = 'marca', alto = 'l', className = '', children, ...pr
       {...props}
     >
       {children}
+    </button>
+  )
+}
+
+// Botón de la pantalla de inicio: icono, título y una línea de qué hace.
+function OpcionInicio({ icono: Icono, titulo, detalle, destacada = false, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`grid min-h-[84px] grid-cols-[52px_1fr_22px] items-center gap-3 rounded-[16px] border-2 p-3 text-left transition-transform active:scale-[0.98] motion-reduce:transition-none ${
+        destacada ? 'border-[var(--color-marca)] bg-[var(--color-marca)] text-white' : 'border-[#111] bg-white text-[#111]'
+      }`}
+    >
+      <span className={`grid h-[52px] w-[52px] place-items-center rounded-[12px] ${destacada ? 'bg-white/15' : 'bg-[#F1E9EF] text-[var(--color-marca)]'}`}>
+        <Icono className="h-7 w-7" aria-hidden="true" />
+      </span>
+      <span>
+        <span className="block text-[19px] font-bold leading-tight">{titulo}</span>
+        <span className={`mt-0.5 block text-[15px] leading-snug ${destacada ? 'text-white/90' : 'text-[#3B333A]'}`}>{detalle}</span>
+      </span>
+      <ChevronRight className={`h-6 w-6 ${destacada ? 'text-white/90' : 'text-[#3B333A]'}`} aria-hidden="true" />
     </button>
   )
 }
@@ -439,11 +467,11 @@ export default function AltaDecaMovil({
   form, onCambiarCampo, onConfirmarCampo, camposObligatorios, camposRevisar, zonas, fieldErrors, error,
   expedicion, empezarEnLista, ocupado, onArchivos, onEmpezarManual,
   agenda, onElegirAgenda, onBorrarDocumento, onCambiarTipoDocumento, onReleerDocumento,
-  estadoGuardado, onSalir, onVistaPrevia, onBorrarBorrador, onGenerar, empresaPropia,
+  estadoGuardado, onSalir, onVistaPrevia, onBorrarBorrador, onGenerar, empresaPropia, series = [],
   sucesivos, nuevoSucesivo, setNuevoSucesivo, onAgregarSucesivo, onBorrarSucesivo, guardandoSucesivo,
   sinConexion = false, fotosSinConexion = 0,
-  modoSinCobertura = 'imprimir', permitirPapel = false, permitirPesoEstimado = false,
-  modoPapel = false, onEmpezarPapel, onRegistrarPapel, preparadoEn,
+  modoSinCobertura = 'imprimir', permitirPesoEstimado = false,
+  preparadoEn,
 }) {
   // La empresa ha elegido no hacer DeCA sin red (Configuración de DeCA).
   const bloqueadoSinRed = sinConexion && modoSinCobertura === 'necesita_red'
@@ -624,41 +652,25 @@ export default function AltaDecaMovil({
   let barra = null
 
   if (enInicio) {
+    // Tres formas de empezar, con el mismo formato y una línea que dice qué
+    // hace cada una (opción B elegida por el usuario 2026-10-15). A mano va
+    // primero: quien vende en el campo no suele tener albarán; antes era un
+    // enlace de texto que casi no se veía.
     contenido = (
       <>
-        <button
-          type="button"
+        <h2 className="px-0.5 text-[20px] font-bold text-[#111]">{t('movil.como_empezar')}</h2>
+        <OpcionInicio
+          destacada icono={Pencil} titulo={t('movil.rellenar_a_mano')} detalle={t('movil.rellenar_a_mano_desc')}
+          onClick={() => { setEnInicio(false); onEmpezarManual() }}
+        />
+        <OpcionInicio
+          icono={Upload} titulo={t('movil.subir_archivo')} detalle={t('movil.subir_archivo_desc')}
+          onClick={() => refArchivo.current?.click()}
+        />
+        <OpcionInicio
+          icono={Camera} titulo={t('movil.foto_albaran')} detalle={t('movil.foto_albaran_desc')}
           onClick={() => refCamara.current?.click()}
-          className="flex min-h-[250px] flex-col items-center justify-center gap-2 rounded-[20px] bg-[var(--color-marca)] text-white transition-transform active:scale-[0.98] motion-reduce:transition-none"
-        >
-          <Camera className="h-20 w-20" strokeWidth={1.8} aria-hidden="true" />
-          <span className="text-[25px] font-bold">{t('movil.foto_albaran')}</span>
-          <span className="text-[17px]">{t('movil.o_del_cmr')}</span>
-        </button>
-        <Boton variante="borde" onClick={() => refArchivo.current?.click()}>
-          <Upload className="h-6 w-6" />{t('movil.subir_archivo')}
-        </Boton>
-        <button type="button" onClick={() => { setEnInicio(false); onEmpezarManual() }} className="min-h-[52px] text-[18px] font-bold text-[#111] underline underline-offset-4">
-          {t('movil.rellenar_a_mano')}
-        </button>
-        {/* Talonario de papel (Configuración de DeCA → Trabajo en campo):
-            se hace la foto del DeCA rellenado a bolígrafo y se registra. */}
-        {permitirPapel && (
-          <Boton
-            variante="borde"
-            onClick={() => {
-              if (sinConexion) return
-              onEmpezarPapel?.()
-              refCamara.current?.click()
-            }}
-            disabled={sinConexion}
-          >
-            <FileText className="h-6 w-6" aria-hidden="true" />{t('campo.movil_registrar_papel')}
-          </Boton>
-        )}
-        {permitirPapel && sinConexion && (
-          <p className="text-[16px] font-bold text-[#3B333A]">{t('campo.papel_necesita_red')}</p>
-        )}
+        />
         <EstadoSinCobertura preparadoEn={preparadoEn} sinConexion={sinConexion} t={t} />
         {/* ¿Hace falta DeCA? (una furgoneta pequeña o el cliente con su
             propio vehículo, no). Pedido del usuario 2026-09-30. */}
@@ -690,6 +702,9 @@ export default function AltaDecaMovil({
         </div>
 
         <FilaDocumentos documentos={documentos} onAbrir={() => setHoja({ tipo: 'docs' })} onOtro={() => refCamara.current?.click()} t={t} />
+
+        {/* Serie de numeración: solo aparece si la empresa tiene más de una. */}
+        <SelectorSerieDeca series={series} value={form.serie || ''} onChange={(v) => onCambiarCampo('serie', v)} grande />
 
         {/* Dos fotos y la lectura casi no ha sacado nada: mejor a mano que
             una tercera foto (pedido del usuario 2026-09-28). */}
@@ -821,11 +836,7 @@ export default function AltaDecaMovil({
         </Boton>
       </>
     )
-    barra = pendientes.length ? null : modoPapel ? (
-      <Boton variante="verde" alto="xl" className="w-full" onClick={() => onRegistrarPapel?.()}>
-        <FileText className="h-7 w-7" />{t('campo.btn_registrar_papel')}
-      </Boton>
-    ) : bloqueadoSinRed ? (
+    barra = pendientes.length ? null : bloqueadoSinRed ? (
       <p role="status" className="flex items-start gap-2.5 rounded-2xl border-[3px] border-[#111] bg-white p-3.5 text-[18px] font-bold text-[#111]">
         <WifiOff className="mt-0.5 h-6 w-6 shrink-0" aria-hidden="true" />{t('campo.necesita_red_barra')}
       </p>
@@ -1022,6 +1033,11 @@ export default function AltaDecaMovil({
           <Boton variante="borde" onClick={cerrar}>{t('movil.todavia_no')}</Boton>
         </>}
       >
+        {vacio(form.numero_albaran) && vacio(form.numero_cmr) && (
+          <p className="rounded-xl border-2 border-[#C98A00] bg-[#FFF6D6] p-3 text-[17px] font-bold text-[#111]">
+            {t('series.aviso_sin_albaran_movil', 'No tiene nº de albarán ni de CMR: su referencia será el número de la serie. Si tiene albarán, pulsa «Todavía no» y escríbelo.')}
+          </p>
+        )}
         {sinConexion ? (
           <p className="text-[19px] font-bold text-[#111]">{modoSinCobertura === 'generar_al_volver' ? t('campo.guardar_para_luego_desc') : t('offline.generar_desc')}</p>
         ) : (
@@ -1061,11 +1077,6 @@ export default function AltaDecaMovil({
       <main ref={refContenido} className={`flex flex-1 flex-col gap-3.5 overflow-y-auto px-3.5 pt-4 ${barra ? 'pb-28' : 'pb-6'}`}>
         {/* Sin cobertura en la finca: se sigue trabajando. El DeCA se imprime
             aquí y se registra solo en Appodo cuando vuelve la red. */}
-        {modoPapel && (
-          <div role="status" className="flex items-start gap-2.5 rounded-2xl border-[3px] border-[#111] bg-white p-3.5 text-[17px] font-bold text-[#111]">
-            <FileText className="mt-0.5 h-6 w-6 shrink-0" aria-hidden="true" />{t('campo.movil_papel_banner')}
-          </div>
-        )}
         {sinConexion && (
           <div role="status" className="flex items-start gap-2.5 rounded-2xl border-[3px] border-[#111] bg-[#FFF3C4] p-3.5 text-[17px] font-bold text-[#111]">
             <WifiOff className="mt-0.5 h-6 w-6 shrink-0" aria-hidden="true" />

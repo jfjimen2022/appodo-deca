@@ -14,6 +14,7 @@ import { useIsMobile } from '../../hooks/useIsMobile'
 import AltaDecaMovil from '../../components/deca/movil/AltaDecaMovil'
 import BuscadorAgendaDialog from '../../components/deca/BuscadorAgendaDialog'
 import AyudaCuandoDeca from '../../components/deca/AyudaCuandoDeca'
+import SelectorSerieDeca from '../../components/deca/SelectorSerieDeca'
 import DecaImprimibleSinConexion from '../../components/deca/DecaImprimibleSinConexion'
 import { validarIdentificadorFiscal } from '../../lib/validacionFiscal'
 import { repartirPorPosicion } from '../../lib/decaReparto'
@@ -78,12 +79,20 @@ const FORM_VACIO = {
   nif_transportista: '', nombre_transportista: '',
   nif_destinatario: '', nombre_destinatario: '',
   matricula_tractor: '', matricula_remolque: '', sin_remolque: false, autorizacion_especial: '',
+  sigpac_poligono: '', sigpac_parcela: '', sigpac_recinto: '',
   origen: '', destino: '',
   fecha_hora_transporte: '',
   naturaleza_mercancia: '', peso_kg: '', peso_bruto_kg: '', peso_estimado: false, bultos: '', bultos_palets: '', volumen_m3: '', codigo_mercancia: '',
   nombre_conductor: '', nif_conductor: '', telefono_conductor: '', email_conductor: '',
   numero_pedido: '', instrucciones_conductor: '', contacto_emergencias: '', tipo_contenedor: '',
   instrucciones_expedidor: '', instrucciones_pago: '', comentarios: '',
+  serie: '',
+}
+
+// «General (DECA-)»: la serie elegida o, si no se eligió, la de por defecto.
+function nombreSerie(series, id) {
+  const s = series.find((x) => x.id === id) || series.find((x) => x.por_defecto && x.activa)
+  return s ? `${s.nombre} (${s.prefijo || '—'})` : ''
 }
 
 function soloMayusculasSinEspacios(v) {
@@ -115,13 +124,14 @@ function formatearFechaLimite(iso) {
 
 function expedicionAForm(exp) {
   return {
-    numero_albaran: exp.numero_albaran ?? '', numero_cmr: exp.numero_cmr ?? '',
+    numero_albaran: exp.numero_albaran ?? '', numero_cmr: exp.numero_cmr ?? '', serie: exp.serie ?? '',
     nif_cargador: exp.nif_cargador ?? '', nombre_cargador: exp.nombre_cargador ?? '',
     domicilio_cargador: exp.domicilio_cargador ?? '',
     nif_transportista: exp.nif_transportista ?? '', nombre_transportista: exp.nombre_transportista ?? '',
     nif_destinatario: exp.nif_destinatario ?? '', nombre_destinatario: exp.nombre_destinatario ?? '',
     matricula_tractor: exp.matricula_tractor ?? '', matricula_remolque: exp.matricula_remolque ?? '',
     sin_remolque: Boolean(exp.sin_remolque), autorizacion_especial: exp.autorizacion_especial ?? '',
+    sigpac_poligono: exp.sigpac_poligono ?? '', sigpac_parcela: exp.sigpac_parcela ?? '', sigpac_recinto: exp.sigpac_recinto ?? '',
     origen: exp.origen ?? '', destino: exp.destino ?? '',
     fecha_hora_transporte: isoADatetimeLocal(exp.fecha_hora_transporte),
     naturaleza_mercancia: exp.naturaleza_mercancia ?? '',
@@ -240,8 +250,7 @@ export default function DecaFormPage() {
   const [decaParaImprimir, setDecaParaImprimir] = useState(null)
   // Configuración de DeCA → Trabajo en campo (valores por defecto = los de
   // fábrica, por si la configuración no llega).
-  const [opcionesCampo, setOpcionesCampo] = useState({ modo: 'imprimir', ejemplares: 2, papel: false, anticipado: false })
-  const [modoPapel, setModoPapel] = useState(false)
+  const [opcionesCampo, setOpcionesCampo] = useState({ modo: 'imprimir', ejemplares: 2, anticipado: false })
   // Motivo de la corrección de un DeCA ya generado (obligatorio por norma).
   const [motivoCorreccion, setMotivoCorreccion] = useState('')
   // Cuándo quedó preparado este móvil para trabajar sin red (agenda y
@@ -268,6 +277,8 @@ export default function DecaFormPage() {
   const [destinatariosCatalogo, setDestinatariosCatalogo] = useState([])
   const [cargadoresCatalogo, setCargadoresCatalogo] = useState([])
   const [rolHabitual, setRolHabitual] = useState(null) // 'cargador' | 'transportista'
+  // Series de numeración (llegan con la configuración, también sin cobertura).
+  const [series, setSeries] = useState([])
   const [camposObligatorios, setCamposObligatorios] = useState(CAMPOS_OBLIGATORIOS_DEFECTO)
   const [tractorasCatalogo, setTractorasCatalogo] = useState([])
   const [remolquesCatalogo, setRemolquesCatalogo] = useState([])
@@ -443,11 +454,11 @@ export default function DecaFormPage() {
   // la copia solo se usa si la petición falla por red, nunca ante un 401/403.
   const aplicarConfiguracion = (data) => {
     setRolHabitual(data?.rol_habitual || 'cargador')
+    if (Array.isArray(data?.series)) setSeries(data.series)
     if (Array.isArray(data?.campos_obligatorios)) setCamposObligatorios(data.campos_obligatorios)
     setOpcionesCampo({
       modo: data?.modo_sin_cobertura || 'imprimir',
       ejemplares: data?.ejemplares_sin_cobertura || 2,
-      papel: Boolean(data?.registrar_papel_por_foto),
       anticipado: Boolean(data?.deca_anticipado),
     })
   }
@@ -525,6 +536,8 @@ export default function DecaFormPage() {
   const construirPayload = () => ({
     numero_albaran: form.numero_albaran.trim(),
     numero_cmr: form.numero_cmr.trim(),
+    // Serie de numeración: vacía = la de por defecto (se fija al Generar).
+    serie: form.serie || null,
     nif_cargador: soloMayusculasSinEspacios(form.nif_cargador),
     nombre_cargador: form.nombre_cargador.trim(),
     domicilio_cargador: form.domicilio_cargador.trim(),
@@ -537,6 +550,9 @@ export default function DecaFormPage() {
     matricula_remolque: form.sin_remolque ? '' : soloMayusculasSinEspacios(form.matricula_remolque),
     sin_remolque: Boolean(form.sin_remolque),
     autorizacion_especial: form.autorizacion_especial.trim(),
+    sigpac_poligono: form.sigpac_poligono.trim(),
+    sigpac_parcela: form.sigpac_parcela.trim(),
+    sigpac_recinto: form.sigpac_recinto.trim(),
     origen: form.origen.trim(),
     destino: form.destino.trim(),
     fecha_hora_transporte: form.fecha_hora_transporte || null,
@@ -726,44 +742,6 @@ export default function DecaFormPage() {
   }
 
   const [generandoPrevia, setGenerandoPrevia] = useState(false)
-
-  // Registrar un DeCA del talonario de papel con su foto (sin PDF ni QR: el
-  // documento que viajó es el papel). Mismos datos obligatorios que un DeCA
-  // de Appodo y al menos una foto del papel (RegistrarPapelExpedicionDecaView).
-  const [registrandoPapel, setRegistrandoPapel] = useState(false)
-  const handleRegistrarPapel = async () => {
-    if (!expedicion?.id) return
-    if (sinConexion) { setError(t('campo.papel_necesita_red')); return }
-    setRegistrandoPapel(true)
-    setError('')
-    setFieldErrors({})
-    try {
-      if (expedicion.estado === 'borrador') {
-        try {
-          await decaService.actualizarExpedicion(expedicion.id, construirPayload())
-        } catch (errGuardado) {
-          aplicarErroresBackend(errGuardado.response?.data)
-          return
-        }
-      }
-      await decaService.registrarPapel(expedicion.id)
-      toast.success(t('campo.papel_registrado_ok'))
-      navigate('/deca')
-    } catch (err) {
-      const d = err.response?.data
-      if (d?.campos_faltantes?.length) {
-        const nombres = d.campos_faltantes.map((c) => t(`expedicion.label_campo_${c}`, c)).join(', ')
-        setFieldErrors(Object.fromEntries(d.campos_faltantes.map((c) => [c, t('expedicion.falta_este_dato')])))
-        setError(t('mensajes.faltan_para_confirmar', { count: d.campos_faltantes.length, campos: nombres }))
-      } else if (d?.documentos_origen) {
-        setError(t('campo.papel_falta_foto'))
-      } else {
-        setError(d?.detail || t('campo.papel_error'))
-      }
-    } finally {
-      setRegistrandoPapel(false)
-    }
-  }
 
   const handleVistaPrevia = async () => {
     if (!expedicion?.id) return
@@ -1530,13 +1508,10 @@ export default function DecaFormPage() {
         fotosSinConexion={fotosSinConexion.length}
         modoSinCobertura={opcionesCampo.modo}
         preparadoEn={preparadoEn}
-        permitirPapel={opcionesCampo.papel}
         permitirPesoEstimado={opcionesCampo.anticipado}
-        modoPapel={modoPapel}
-        onEmpezarPapel={() => { setModoPapel(true); setAltaManualMovil(true) }}
-        onRegistrarPapel={handleRegistrarPapel}
         form={form}
         onCambiarCampo={(campo, valor) => set(campo)(valor)}
+        series={series}
         onConfirmarCampo={confirmarCampoMovil}
         camposObligatorios={obligatoriosEfectivos}
         camposRevisar={[...new Set([...camposARevisar, ...camposDudosos, ...camposCompletadosIA, ...camposAgenda, ...camposPorOrden])]}
@@ -2058,6 +2033,14 @@ export default function DecaFormPage() {
               <Input value={form.numero_cmr} onChange={(e) => set('numero_cmr')(e.target.value)} placeholder={t('expedicion.placeholder_numero_cmr', 'Solo si el transporte lleva CMR')} disabled={readOnly} />
             </div>
           </div>
+          {expedicion?.numero_interno ? (
+            <p className="text-sm text-gray-600">
+              {t('series.numero_deca', 'Nº DeCA')}: <strong className="font-mono text-gray-800">{expedicion.numero_interno}</strong>
+              {expedicion.serie_nombre ? ` · ${t('series.serie', 'Serie')} ${expedicion.serie_nombre}` : ''}
+            </p>
+          ) : (
+            <SelectorSerieDeca series={series} value={form.serie} onChange={(v) => set('serie')(v)} disabled={readOnly} />
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t('expedicion.label_nif_remitente')} <span className="text-red-500">*</span></Label>
@@ -2311,6 +2294,36 @@ export default function DecaFormPage() {
           </div>
         </SeccionFormulario>
 
+        {/* Datos SIGPAC de la parcela de origen encima de "Información adicional", siempre visible
+            y con los tres campos en la misma línea. Opcionales: si se dejan
+            en blanco no salen en el PDF. */}
+        <Card>
+          <CardContent className="p-5 space-y-3">
+            <div className="flex items-center gap-2.5">
+              <MapPin className="h-5 w-5 text-gray-400" aria-hidden="true" />
+              <div>
+                <h2 className="font-bold text-gray-900">{t('expedicion.bloque_sigpac', 'Datos SIGPAC')}</h2>
+                <p className="text-xs text-gray-500">{t('expedicion.bloque_sigpac_desc', 'Opcional: parcela de origen de la mercancía. Si se deja en blanco, no aparece en el PDF.')}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                ['sigpac_poligono', t('expedicion.label_sigpac_poligono', 'Polígono')],
+                ['sigpac_parcela', t('expedicion.label_sigpac_parcela', 'Parcela')],
+                ['sigpac_recinto', t('expedicion.label_sigpac_recinto', 'Recinto')],
+              ].map(([campo, etiqueta]) => (
+                <div key={campo} className="space-y-1.5 min-w-0">
+                  <Label htmlFor={`campo-${campo}`}>{etiqueta}</Label>
+                  <Input
+                    id={`campo-${campo}`} inputMode="numeric" maxLength={10}
+                    value={form[campo]} onChange={(e) => set(campo)(e.target.value)} disabled={readOnly}
+                  />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Información adicional y Transportistas sucesivos -- tarjetas
             plegables al final del formulario, colapsadas por defecto. */}
         <Card>
@@ -2484,15 +2497,6 @@ export default function DecaFormPage() {
               </Button>
             )}
 
-            {/* Talonario de papel (Configuración de DeCA → Trabajo en campo):
-                el papel ya viajó; aquí solo se registra con su foto. */}
-            {opcionesCampo.papel && (puedeConfirmar || puedeGenerar) && (
-              <Button type="button" variant="outline" disabled={registrandoPapel} onClick={handleRegistrarPapel} className="w-full sm:w-auto">
-                {registrandoPapel ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
-                {t('campo.btn_registrar_papel')}
-              </Button>
-            )}
-
             {puedeGenerar && (
               <Button type="button" disabled={generando} onClick={() => setDialogGenerarAbierto(true)} className="w-full sm:w-auto bg-green-600 hover:bg-green-700">
                 {generando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <QrCode className="h-4 w-4 mr-2" />}
@@ -2587,6 +2591,13 @@ export default function DecaFormPage() {
               )}
             </DialogDescription>
           </DialogHeader>
+          {/* Sin albarán ni CMR, la referencia será el número de la serie: se
+              avisa por si es un despiste (aún se puede escribir el albarán). */}
+          {!form.numero_albaran.trim() && !form.numero_cmr.trim() && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {t('series.aviso_sin_albaran', 'Este DeCA no tiene nº de albarán ni de CMR: su referencia será el número de la serie {{serie}}. Si tiene albarán, cancela y escríbelo antes de generar.', { serie: nombreSerie(series, form.serie) })}
+            </p>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogGenerarAbierto(false)}>{t('expedicion.btn_cancelar')}</Button>
             <Button onClick={handleGenerar} className="bg-green-600 hover:bg-green-700">{t('expedicion.btn_generar_deca')}</Button>

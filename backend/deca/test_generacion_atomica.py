@@ -13,7 +13,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from .models import ConfiguracionDeca, EventoExpedicionDeca, ExpedicionDeca, ModificacionDeca
+from .models import ConfiguracionDeca, EventoExpedicionDeca, ExpedicionDeca, ModificacionDeca, SerieNumeracionDeca
 from .services import integracion_service
 
 User = get_user_model()
@@ -64,7 +64,7 @@ class GeneracionAtomicaDecaTests(APITestCase):
         self.assertEqual(exp.estado, ExpedicionDeca.Estado.CONFIRMADO)
         self.assertFalse(exp.numero_interno)
         self.assertFalse(exp.pdf_generado)
-        self.assertEqual(ConfiguracionDeca.objects.get().ultimo_numero_automatico, 0)
+        self.assertFalse(SerieNumeracionDeca.objects.filter(ultimo_numero__gt=0).exists())
         self.assertFalse(exp.eventos.filter(tipo_evento=EventoExpedicionDeca.TipoEvento.GENERADA).exists())
 
         # Al reintentar sale el PRIMER número: no quedó ninguno quemado.

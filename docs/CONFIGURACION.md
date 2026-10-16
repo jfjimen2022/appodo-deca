@@ -77,8 +77,13 @@ reciben la próxima vez que abran la aplicación con red.
   7 de la Orden FOM/2861/2012); esto solo ahorra trabajo.
 - **Referencia de la expedición**: el número que identifica cada DeCA en el
   asunto del email, el nombre del PDF y el informe de auditoría: nº de
-  albarán, nº de CMR o un **contador automático** con prefijo (p. ej.
-  `DECA-0001`).
+  albarán, nº de CMR o el **número de la serie**.
+- **Series de numeración**: una por actividad (nombre, prefijo y dígitos;
+  p. ej. Algodón `DECA_ALG-00001`), cada una con su contador. Una es la
+  serie **por defecto** y no se puede desactivar. El contador solo lo mueve
+  la aplicación al generar; una serie ya usada no se borra, se desactiva. La
+  primera vez se crea sola la serie «General» con el prefijo y el contador
+  que ya tuviera la instalación.
 - **Acceso público (QR)**:
   - *Días de visibilidad* del enlace del QR (mínimo legal 7). Pasado ese
     plazo el PDF ya no se descarga sin sesión, pero se conserva.
@@ -118,15 +123,13 @@ La lectura con IA solo funciona si el servidor tiene clave de Gemini
 ### Sin cobertura
 
 - **Qué hace el móvil sin red** (se elige uno):
-  - *Imprimir en el móvil* (de fábrica): genera el DeCA en papel con su QR y
+  - *Imprimir en el móvil* (de fábrica): genera la hoja del DeCA con su QR y
     lo registra al volver la red.
   - *Guardar y generar al volver la red*: no imprime; solo vale si el camión
     puede esperar.
   - *Necesita red*: sin cobertura no deja hacer DeCA.
 - **Ejemplares al imprimir** (1 a 3): transportista, + cargador,
   + destinatario.
-- **Registrar DeCA de papel por foto** (apagado): último recurso para el
-  talonario a bolígrafo. Queda como «DeCA en papel», sin PDF ni QR propios.
 - **DeCA anticipado con peso estimado** (apagado): generar antes de que
   llegue el camión; el peso real se pone con *Corregir datos* antes de que
   salga. No se puede activar con 0 horas de corrección.

@@ -33,7 +33,8 @@ from core_utils.ip_cliente import ip_cliente as _ip_cliente
 from core_utils.validacion_ficheros import FicheroNoValido, preparar_documento
 from core_utils.validadores_fiscales import normalizar as _normalizar_clave_importacion
 
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q, Subquery, Value
+from django.db.models.functions import Concat
 
 from .models import (
     AliasAgendaDeca,
@@ -50,6 +51,7 @@ from .models import (
     PlantillaDocumentoDeca,
     ReferenciaErpDescartada,
     RemolqueDeca,
+    SerieNumeracionDeca,
     TractoraDeca,
     TransportistaSucesivoDeca,
 )
@@ -66,6 +68,7 @@ from .serializers import (
     ExpedicionDecaSerializer,
     PlantillaDocumentoDecaSerializer,
     RemolqueDecaSerializer,
+    SerieNumeracionDecaSerializer,
     TractoraDecaSerializer,
     TransportistaSucesivoDecaSerializer,
 )
@@ -107,6 +110,7 @@ CAMPOS_AUDITABLES_EXPEDICION = [
     'nif_transportista', 'nombre_transportista',
     'nif_destinatario', 'nombre_destinatario',
     'matricula_tractor', 'matricula_remolque', 'sin_remolque', 'autorizacion_especial',
+    'sigpac_poligono', 'sigpac_parcela', 'sigpac_recinto',
     'origen', 'destino', 'fecha_hora_transporte',
     'naturaleza_mercancia', 'peso_kg', 'peso_bruto_kg', 'peso_estimado', 'bultos', 'bultos_palets', 'volumen_m3', 'codigo_mercancia',
     'numero_pedido', 'instrucciones_conductor', 'contacto_emergencias', 'tipo_contenedor',
@@ -184,7 +188,7 @@ class ExpedicionDecaListCreateView(generics.ListCreateAPIView):
     ordering_fields = [
         'fecha_alta', 'fecha_hora_transporte', 'numero_albaran', 'estado',
         'nombre_cargador', 'nombre_transportista', 'nombre_destinatario', 'matricula_tractor',
-        'referencia_externa',
+        'referencia_externa', 'numero_interno',
     ]
     ordering = ['-fecha_alta']
 
@@ -195,12 +199,41 @@ class ExpedicionDecaListCreateView(generics.ListCreateAPIView):
         # Antes de listar, se cierran los avisos del ERP ya caducados: así el
         # filtro "Modificados en el ERP" y la etiqueta roja nunca los enseñan.
         avisos_erp_service.caducar_avisos_erp()
-        qs = ExpedicionDeca.objects.select_related('clave_integracion', 'creado_por')
+        qs = ExpedicionDeca.objects.select_related('clave_integracion', 'creado_por', 'serie')
+        # Quién la generó (último evento «generada»), en la misma consulta: es
+        # la persona responsable de lo que llega del ERP sin creado_por.
+        generada = EventoExpedicionDeca.objects.filter(
+            expedicion=OuterRef('pk'), tipo_evento=EventoExpedicionDeca.TipoEvento.GENERADA, usuario__isnull=False,
+        ).order_by('-fecha_alta')
+        qs = qs.annotate(
+            generado_por_nombre=Subquery(generada.annotate(
+                nombre_completo=Concat('usuario__first_name', Value(' '), 'usuario__last_name'),
+            ).values('nombre_completo')[:1]),
+            generado_por_username=Subquery(generada.values('usuario__username')[:1]),
+        )
+        # «Hechas por mí» (filtro por defecto del listado): las que dio de alta
+        # quien mira o las que generó él. Lo recibido del ERP no tiene
+        # creado_por; es de quien lo completa y lo genera.
+        if qp.get('creado_por') == 'yo':
+            generadas_por_mi = EventoExpedicionDeca.objects.filter(
+                expedicion=OuterRef('pk'), usuario=self.request.user,
+                tipo_evento=EventoExpedicionDeca.TipoEvento.GENERADA,
+            )
+            qs = qs.filter(Q(creado_por=self.request.user) | Exists(generadas_por_mi))
         if qp.get('estado'):
             qs = qs.filter(estado=qp['estado'])
+        # Serie de numeración (actividad).
+        if qp.get('serie'):
+            try:
+                qs = qs.filter(serie_id=uuid.UUID(qp['serie']))
+            except ValueError:
+                qs = qs.none()
         if qp.get('q'):
-            # Nº de albarán o referencia del ERP (lo que llega por la integración).
-            qs = qs.filter(Q(numero_albaran__icontains=qp['q']) | Q(referencia_externa__icontains=qp['q']))
+            # Nº de albarán, nº de DeCA (serie) o referencia del ERP (lo que llega por la integración).
+            qs = qs.filter(
+                Q(numero_albaran__icontains=qp['q']) | Q(referencia_externa__icontains=qp['q'])
+                | Q(numero_interno__icontains=qp['q'])
+            )
         # Origen: recibido del ERP por la integración, o hecho a mano aquí.
         if qp.get('origen') == 'erp':
             qs = qs.exclude(referencia_externa='')
@@ -485,6 +518,43 @@ class CargadorDecaDetailView(_CatalogoDecaDetailView):
     """Ficha de un cargador."""
     serializer_class = CargadorDecaSerializer
     modelo = CargadorDeca
+
+
+class SerieNumeracionDecaListView(_CatalogoDecaListCreateView):
+    """Series de numeración (Configuración de DeCA). Pocas: sin paginar. Si no hay ninguna, se crea la «General» al pedirlas."""
+    serializer_class = SerieNumeracionDecaSerializer
+    modelo = SerieNumeracionDeca
+    pagination_class = None
+    ordering_fields = ['nombre']
+    ordering = ['-por_defecto', 'nombre']
+
+    def get_queryset(self):
+        from .services.series_service import serie_por_defecto
+
+        serie_por_defecto()
+        return super().get_queryset()
+
+    def perform_create(self, serializer):
+        # La «General» existe antes que cualquier otra: la primera serie que
+        # se cree no pasa a ser la de por defecto sin que nadie lo pida.
+        from .services.series_service import serie_por_defecto
+
+        serie_por_defecto()
+        super().perform_create(serializer)
+
+
+class SerieNumeracionDecaDetailView(_CatalogoDecaDetailView):
+    serializer_class = SerieNumeracionDecaSerializer
+    modelo = SerieNumeracionDeca
+
+    def perform_destroy(self, instance):
+        # Una serie con DeCA ya numerados se conserva (se desactiva): borrarla
+        # dejaría esos números sin su serie.
+        if instance.expediciones.exists() or instance.ultimo_numero:
+            raise ValidationError({'detail': 'Esta serie ya se ha usado: desactívala en vez de borrarla.'})
+        if instance.por_defecto:
+            raise ValidationError({'detail': 'No se puede borrar la serie por defecto: marca antes otra.'})
+        instance.delete()
 
 
 class TractoraDecaListView(_CatalogoDecaListCreateView):
@@ -930,7 +1000,7 @@ class DocumentoOrigenDecaUploadView(APIView):
         # que no cambian. Pero no se lee (no hay nada que rellenar) y no se
         # puede quitar ni cambiar después (DocumentoOrigenDecaDetailView sigue
         # exigiendo borrador): queda como rastro de auditoría.
-        ya_emitido = expedicion.estado in (ExpedicionDeca.Estado.GENERADO, ExpedicionDeca.Estado.PAPEL)
+        ya_emitido = expedicion.estado == ExpedicionDeca.Estado.GENERADO
         if expedicion.estado != ExpedicionDeca.Estado.BORRADOR and not ya_emitido:
             raise PermissionDenied('Solo se pueden añadir documentos a una expedición en borrador o ya generada.')
 
@@ -1189,38 +1259,6 @@ class GenerarDecaView(APIView):
         return Response(ExpedicionDecaSerializer(expedicion, context={'request': request}).data)
 
 
-class RegistrarPapelExpedicionDecaView(APIView):
-    """BORRADOR/CONFIRMADO -> PAPEL (2026-09-30). Un DeCA rellenado a mano en
-    el talonario se registra con su foto para que conste en el registro de un
-    año (art. 9). No se genera PDF ni QR: el documento que viajó es el papel,
-    y la foto es su copia. Exige los mismos datos que un DeCA de Appodo y al
-    menos una foto del papel. Solo si la empresa lo tiene activado."""
-    permission_classes = DECA_PERMS
-
-    def post(self, request, expedicion_id):
-        expedicion = get_object_or_404(
-            ExpedicionDeca, id=expedicion_id,
-        )
-        config = ConfiguracionDeca.objects.filter(pk=1).first()
-        if not (config and config.registrar_papel_por_foto):
-            raise PermissionDenied('No está activado registrar DeCA de papel (Configuración de DeCA).')
-        if expedicion.estado not in (ExpedicionDeca.Estado.BORRADOR, ExpedicionDeca.Estado.CONFIRMADO):
-            raise PermissionDenied('Solo se puede registrar como DeCA en papel una expedición en borrador o confirmada.')
-        if not expedicion.documentos_origen.exists():
-            raise ValidationError({'documentos_origen': 'Falta la foto del DeCA de papel: es la copia del documento que viajó.'})
-        faltantes = obligatorios_service.faltantes(expedicion)
-        if faltantes:
-            raise ValidationError({'campos_faltantes': faltantes})
-
-        expedicion.estado = ExpedicionDeca.Estado.PAPEL
-        expedicion.save(update_fields=['estado', 'fecha_actualizacion'])
-        auditoria_service.registrar_evento(
-            expedicion, EventoExpedicionDeca.TipoEvento.REGISTRADA_PAPEL, usuario=request.user,
-        )
-        aprendizaje_service.resolver_lecturas(expedicion)
-        return Response(ExpedicionDecaSerializer(expedicion, context={'request': request}).data)
-
-
 class AnularExpedicionDecaView(APIView):
     """Anula una expedición CONFIRMADA o GENERADA -- nunca un BORRADOR
     (2026-09-25): anular es "esto se emitió oficialmente y se cancela", y un
@@ -1417,7 +1455,7 @@ class _ExportarExpedicionesDecaView(APIView):
         vista = ExpedicionDecaListCreateView()
         vista.request = request
         expediciones = list(vista.filter_queryset(vista.get_queryset()))
-        filtros = {c: qp.get(c) for c in ('estado', 'q', 'origen', 'modificado_erp', 'incompletas')}
+        filtros = {c: qp.get(c) for c in ('creado_por', 'serie', 'estado', 'q', 'origen', 'modificado_erp', 'incompletas')}
         generado_por = _nombre_usuario(request.user)
         config = _config_informes()
         try:

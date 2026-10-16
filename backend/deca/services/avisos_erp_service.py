@@ -1,8 +1,8 @@
 """Avisos "Modificado en el ERP" que caducan con el plazo de corrección.
 
 Decisión del usuario (2026-10-14): el aviso solo tiene sentido mientras el
-DeCA se puede corregir. Pasado el plazo (o si deja de estar generado: anulado,
-en papel) ya no va a cambiar, así que un aviso sin contestar se cierra solo y
+DeCA se puede corregir. Pasado el plazo (o si deja de estar generado:
+anulado) ya no va a cambiar, así que un aviso sin contestar se cierra solo y
 queda en el historial. Se llama al abrir el listado o la ficha (para que nunca
 se vea uno caducado) y desde el comando programado `caducar_avisos_erp`."""
 from __future__ import annotations

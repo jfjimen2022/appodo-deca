@@ -6,6 +6,49 @@ SemVer del ERP Appodo — cada entrada que proviene de un resync de código
 anota además la versión y fecha de Appodo de origen (ver
 `docs/PLAN_EXTRACCION.md`, sección "Nombre y versión").
 
+## [v03.3] — 2026-10-16
+
+Sincronizado con el módulo DeCA de Appodo v4.57.0 (2026-10-15).
+
+### Añadido
+
+- **Series de numeración**: una serie por actividad (nombre, prefijo y
+  dígitos; p. ej. `DECA_ALG-00001`), cada una con su contador, en
+  Configuración. Todo DeCA generado recibe el siguiente número de su serie,
+  tenga o no albarán; una serie es la de por defecto y en el alta se puede
+  elegir otra. Filtro por serie y columna «Nº DeCA» en el listado; la
+  búsqueda encuentra también el nº de DeCA. La migración crea la serie
+  «General» con el prefijo y el contador que ya hubiera.
+- **Filtro «Hechas por mí»** (por defecto en el listado, con «Todas» al
+  lado): las que diste de alta o generaste tú, también las llegadas del ERP.
+  Se refleja en la cabecera de los informes exportados.
+- **Columna «Usuario»** en el listado: quién la hizo o, en lo que llega del
+  ERP, quién la generó.
+- **PDF sin cobertura**: «Guardar o compartir PDF» genera el PDF en el propio
+  móvil, sin red (jsPDF), con los mismos ejemplares, QR y firmas que la hoja
+  impresa, para cuando Imprimir no responde (app instalada en iPhone y
+  algunos Android) o no hay impresora.
+- **Datos SIGPAC** opcionales (polígono, parcela, recinto) de la finca de
+  origen: salen en el PDF, la ficha y la hoja sin cobertura solo si se
+  rellenan.
+
+### Cambiado
+
+- **Inicio del alta en el móvil**: *¿Cómo lo quieres hacer?* con tres
+  botones iguales: Rellenar a mano, Subir PDF o foto guardada y Foto del
+  albarán.
+
+### Quitado
+
+- **Estado «DeCA en papel»** y la opción «Registrar DeCA de papel por foto»:
+  la hoja del talonario se adjunta a la ficha del DeCA con «Adjuntar
+  documento». Los DeCA que ya estuvieran en ese estado conservan sus datos.
+
+### Al actualizar
+
+`docker compose up -d --build`: la migración `0006` se aplica sola al
+arrancar el backend.
+
 ## [v03.2] — 2026-10-15
 
 ### Cambiado

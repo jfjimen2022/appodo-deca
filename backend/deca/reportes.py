@@ -27,18 +27,35 @@ def _fecha_legible(dt):
 
 # ─── Expediciones ────────────────────────────────────────────────────────
 
+def _es_uuid(valor) -> bool:
+    import uuid
+
+    try:
+        uuid.UUID(str(valor))
+        return True
+    except ValueError:
+        return False
+
+
 def resumen_filtros_legible_expediciones(filtros: dict | None) -> str:
     """Texto humano de los filtros aplicados al listado de expediciones, para
     la cabecera del informe."""
     if not filtros:
         return 'Sin filtros aplicados'
     partes = []
+    if filtros.get('creado_por') == 'yo':
+        partes.append('Hechas por mí')
+    if filtros.get('serie'):
+        from .models import SerieNumeracionDeca
+
+        serie = SerieNumeracionDeca.objects.filter(pk=filtros['serie']).first() if _es_uuid(filtros['serie']) else None
+        partes.append(f'Serie: {serie.nombre if serie else "—"}')
     if filtros.get('estado'):
         partes.append(f'Estado: {ESTADO_LABELS_EXPEDICION.get(filtros["estado"], filtros["estado"])}')
     if filtros.get('q'):
         partes.append(f'Búsqueda: "{filtros["q"]}"')
     if filtros.get('origen') in ('erp', 'appodo'):
-        partes.append('Recibidos del ERP' if filtros['origen'] == 'erp' else 'Hechos en Appodo')
+        partes.append('Recibidos del ERP' if filtros['origen'] == 'erp' else 'Creados a mano (no vienen del ERP)')
     if filtros.get('modificado_erp') == 'true':
         partes.append('Modificados en el ERP')
     if filtros.get('incompletas') == 'true':
@@ -48,13 +65,14 @@ def resumen_filtros_legible_expediciones(filtros: dict | None) -> str:
 
 COLUMNAS_EXPEDICIONES = {
     'numero_albaran':  {'label': 'Nº Albarán', 'peso': 10, 'ancho_excel': 16},
-    'estado':          {'label': 'Estado', 'peso': 8, 'ancho_excel': 12},
+    'numero_deca':     {'label': 'Nº DeCA', 'peso': 10, 'ancho_excel': 16},
+    'estado':         {'label': 'Estado', 'peso': 8, 'ancho_excel': 12},
     'cargador':        {'label': 'Cargador', 'peso': 18, 'ancho_excel': 26, 'truncar': 40},
     'transportista':   {'label': 'Transportista', 'peso': 18, 'ancho_excel': 26, 'truncar': 40},
     'destinatario':    {'label': 'Destinatario', 'peso': 18, 'ancho_excel': 26, 'truncar': 40},
     'matricula':       {'label': 'Matrícula', 'peso': 10, 'ancho_excel': 14},
     'fecha_transporte': {'label': 'Fecha transporte', 'peso': 12, 'ancho_excel': 18},
-    'creado_por':      {'label': 'Creado por', 'peso': 12, 'ancho_excel': 20, 'truncar': 30},
+    'creado_por':      {'label': 'Usuario', 'peso': 12, 'ancho_excel': 20, 'truncar': 30},
     'ref_erp':         {'label': 'Ref. ERP', 'peso': 10, 'ancho_excel': 16},
 }
 ORDEN_COLUMNAS_EXPEDICIONES = list(COLUMNAS_EXPEDICIONES.keys())
@@ -62,7 +80,9 @@ ORDEN_COLUMNAS_EXPEDICIONES = list(COLUMNAS_EXPEDICIONES.keys())
 
 def _valor_columna_expedicion(col_id, e):
     if col_id == 'numero_albaran':
-        return e.numero_albaran or str(e.id)[:8]
+        return e.numero_albaran or '—'
+    if col_id == 'numero_deca':
+        return e.numero_interno or '—'
     if col_id == 'estado':
         return ESTADO_LABELS_EXPEDICION.get(e.estado, e.estado)
     if col_id == 'cargador':
@@ -76,10 +96,14 @@ def _valor_columna_expedicion(col_id, e):
     if col_id == 'fecha_transporte':
         return _fecha_legible(e.fecha_hora_transporte)
     if col_id == 'creado_por':
-        if not e.creado_por_id:
-            # Llegó del ERP por la integración: no lo creó ninguna persona.
-            return f'ERP ({e.clave_integracion.nombre})' if e.clave_integracion_id else '—'
-        return e.creado_por.get_full_name() or e.creado_por.username
+        if e.creado_por_id:
+            return e.creado_por.get_full_name() or e.creado_por.username
+        # Llegó del ERP por la integración: el usuario es quien la generó
+        # (anotado en el queryset del listado); si nadie la generó aún, el ERP.
+        generado_por = (getattr(e, 'generado_por_nombre', None) or '').strip() or getattr(e, 'generado_por_username', None)
+        if generado_por:
+            return generado_por
+        return f'ERP ({e.clave_integracion.nombre})' if e.clave_integracion_id else '—'
     if col_id == 'ref_erp':
         return e.referencia_externa or '—'
     return '—'

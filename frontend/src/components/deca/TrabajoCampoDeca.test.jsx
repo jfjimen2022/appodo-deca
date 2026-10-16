@@ -9,7 +9,6 @@ vi.mock('react-i18next', () => ({
 const CONFIG = {
   modo_sin_cobertura: 'imprimir',
   ejemplares_sin_cobertura: 2,
-  registrar_papel_por_foto: false,
   deca_anticipado: false,
   aviso_sin_completar: true,
   aviso_sin_completar_dias: 2,
@@ -29,7 +28,7 @@ describe('TrabajoCampoDeca', () => {
 
   it('cada opción lleva su explicación y abajo la leyenda', () => {
     render(<TrabajoCampoDeca config={CONFIG} set={vi.fn()} />)
-    expect(screen.getByText('campo.cfg_papel_desc')).toBeInTheDocument()
+    expect(screen.getByText('campo.cfg_anticipado_desc')).toBeInTheDocument()
     expect(screen.getByText('campo.cfg_anticipado_legal')).toBeInTheDocument()
     expect(screen.getByText('campo.leyenda_titulo')).toBeInTheDocument()
     expect(screen.getByText('campo.leyenda_modo')).toBeInTheDocument()

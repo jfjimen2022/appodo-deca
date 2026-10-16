@@ -121,6 +121,9 @@ class ConfiguracionDeca(models.Model):
                    'vacío en una expedición concreta, se cae en cascada al siguiente disponible '
                    '(albarán → CMR → contador automático → id interno), nunca se deja sin nada.',
     )
+    # Contador único de antes de v4.56.0. Ahora numeran las series
+    # (SerieNumeracionDeca): la migración 0035 los copió a la serie «General»
+    # y solo se leen para crear esa serie si aún no existe.
     prefijo_numero_automatico = models.CharField(max_length=20, blank=True, default='DECA-')
     ultimo_numero_automatico = models.PositiveIntegerField(default=0)
 
@@ -207,9 +210,6 @@ class ConfiguracionDeca(models.Model):
         default=2, validators=[MinValueValidator(1), MaxValueValidator(3)],
         help_text='Ejemplares que se imprimen sin cobertura: 1 transportista, 2 + cargador, 3 + destinatario.',
     )
-    # Talonario de papel: un DeCA rellenado a bolígrafo se registra después
-    # con su foto, para que conste en el registro de un año (art. 9).
-    registrar_papel_por_foto = models.BooleanField(default=False)
     # DeCA preparado antes de que llegue el camión con el peso previsto.
     # Apagado por defecto (decisión del usuario 2026-09-30): el art. 6.d pide
     # el peso de lo que se transporta, así que el estimado tiene que
@@ -343,6 +343,36 @@ class ReferenciaErpDescartada(BaseModel):
         return self.referencia_externa
 
 
+class SerieNumeracionDeca(BaseModel):
+    """Serie de numeración del DeCA (pedido del usuario 2026-10-15): cada
+    actividad con su prefijo y su contador ("DECA_ALG-00001", "DECA_TOM-00001").
+    Todo DeCA generado recibe el siguiente número de su serie, tenga o no
+    albarán (ver services/series_service.py). Una sola serie por defecto; una serie usada no se borra, se desactiva."""
+
+    nombre = models.CharField(max_length=60)
+    prefijo = models.CharField(max_length=20, blank=True)
+    digitos = models.PositiveSmallIntegerField(default=5, validators=[MinValueValidator(1), MaxValueValidator(10)])
+    # Solo lo mueve series_service.asignar_numero (al Generar), nunca a mano.
+    ultimo_numero = models.PositiveIntegerField(default=0)
+    por_defecto = models.BooleanField(default=False)
+    activa = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'deca_series_numeracion'
+        verbose_name = 'Serie de numeración DeCA'
+        verbose_name_plural = 'Series de numeración DeCA'
+        ordering = ['nombre']
+        constraints = [
+            models.UniqueConstraint(fields=['nombre'], name='deca_serie_nombre_unico'),
+            models.UniqueConstraint(
+                fields=['por_defecto'], condition=models.Q(por_defecto=True), name='deca_serie_una_por_defecto',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.nombre} ({self.prefijo})'
+
+
 class ExpedicionDeca(BaseModel):
     """Una expedición de transporte con su Documento electrónico de Control
     Administrativo (DeCA). Nace en BORRADOR con los datos extraídos/tecleados
@@ -350,16 +380,12 @@ class ExpedicionDeca(BaseModel):
 
     class Estado(models.TextChoices):
         """Ciclo de vida: borrador (editable) → confirmado (datos legales
-        completos) → generado (PDF y QR oficiales) → anulado. `papel` es un
-        DeCA del talonario registrado después por foto: no tiene PDF ni QR
-        propios."""
+        completos) → generado (PDF y QR oficiales) → anulado. La hoja del
+        talonario en papel se adjunta a la ficha del DeCA."""
         BORRADOR = 'borrador', 'Borrador'
         CONFIRMADO = 'confirmado', 'Confirmado'
         GENERADO = 'generado', 'Generado'
         ANULADO = 'anulado', 'Anulado'
-        # DeCA del talonario de papel, registrado después con su foto: el
-        # papel es el documento que viajó, así que no se genera PDF ni QR.
-        PAPEL = 'papel', 'DeCA en papel'
 
     estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.BORRADOR)
 
@@ -375,10 +401,14 @@ class ExpedicionDeca(BaseModel):
     )
     numero_interno = models.CharField(
         max_length=40, blank=True, editable=False,
-        help_text='Número autonumerado por la aplicación (prefijo + contador de '
-                   'ConfiguracionDeca), asignado UNA VEZ al Generar cuando la empresa tiene '
-                   'identificador_preferido="automatico" y no llega con ningún número externo '
-                   'propio. Nunca se reasigna ni se recalcula en una corrección posterior.',
+        help_text='Número de su serie (prefijo + contador de SerieNumeracionDeca), asignado '
+                   'UNA VEZ al Generar a todo DeCA desde v4.56.0, tenga o no albarán. Nunca se '
+                   'reasigna ni se recalcula en una corrección posterior.',
+    )
+    # Serie de numeración elegida (vacía = la serie por defecto, que se fija
+    # al Generar). No cambia una vez generado: el número ya está asignado.
+    serie = models.ForeignKey(
+        'SerieNumeracionDeca', on_delete=models.PROTECT, null=True, blank=True, related_name='expediciones',
     )
 
     # Año/mes de la expedición -- fijan la ruta de almacenamiento y no
@@ -410,6 +440,12 @@ class ExpedicionDeca(BaseModel):
     # Art. 6.e: solo cuando el vehículo circula con una autorización especial
     # de circulación (transportes especiales, góndolas...).
     autorizacion_especial = models.CharField(max_length=100, blank=True)
+    # Datos SIGPAC de la parcela de origen (pedido del usuario 2026-10-14):
+    # polígono, parcela y recinto. Opcionales: si van en blanco no salen en
+    # el PDF. Texto (no número) por si llevan ceros a la izquierda.
+    sigpac_poligono = models.CharField(max_length=10, blank=True)
+    sigpac_parcela = models.CharField(max_length=10, blank=True)
+    sigpac_recinto = models.CharField(max_length=10, blank=True)
     # DeCA hecho SIN COBERTURA en el móvil e impreso allí mismo (2026-09-30):
     # la referencia la pone el móvil (única por empresa, sirve para que al
     # volver la cobertura se registre UNA sola vez aunque el envío se repita)
@@ -636,7 +672,6 @@ class EventoExpedicionDeca(BaseModel):
         DESCARGA_PUBLICA = 'descarga_publica', 'Descarga pública por QR'
         ANULADA = 'anulada', 'Anulada'
         ENVIADA_EMAIL = 'enviada_email', 'Enviada por email'
-        REGISTRADA_PAPEL = 'registrada_papel', 'Registrada como DeCA en papel'
         CAMBIO_ERP = 'cambio_erp', 'Modificado en el ERP'
 
     expedicion = models.ForeignKey(

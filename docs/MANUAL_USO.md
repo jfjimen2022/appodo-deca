@@ -80,10 +80,12 @@ está en la agenda, casi todo se elige con un toque.
 
 1. **Nuevo DeCA.** En Expediciones → **Nuevo DeCA**. En el móvil se abre un
    alta pensada para usarse de pie y a pleno sol: botones grandes y mucho
-   contraste. Lo más rápido es **Foto del albarán** (o del CMR): la
-   aplicación lee la foto y solo te pregunta lo que falta. Sin papel a mano,
-   **Rellenar a mano**. Abajo debe poner «Listo para trabajar sin
-   cobertura».
+   contraste. Pregunta *¿Cómo lo quieres hacer?* con tres botones:
+   **Rellenar a mano** (lo habitual sin albarán, p. ej. venta directa en el
+   campo), **Subir PDF o foto guardada** (el albarán que llegó por email) y
+   **Foto del albarán** (o del CMR, con la cámara). Con PDF o foto, la
+   aplicación lee los datos y solo te pregunta lo que falta. Abajo debe poner
+   «Listo para trabajar sin cobertura».
 2. **«Solo esto»: lo que falta.** Arriba ves cuántos datos faltan. Cada dato
    obligatorio sale en amarillo con la etiqueta **Falta**, y el botón de
    abajo te lleva siempre al siguiente.
@@ -172,8 +174,13 @@ red antes de salir, así que tiene la agenda y la configuración guardadas.
 2. Al final, el botón verde es **Generar e imprimir sin conexión**. Antes de
    imprimir se comprueban los mismos datos obligatorios que con red: el
    papel sale tal cual.
-3. **Imprimir** con la impresora de la caseta (wifi o bluetooth) o
-   **Guardar como PDF**.
+3. **Imprimir** con la impresora de la caseta (wifi o bluetooth). Si al
+   pulsar Imprimir no aparece nada (pasa en el iPhone con la app en la
+   pantalla de inicio y en algunos Android con la app instalada) o no hay
+   impresora, usa **Guardar o compartir PDF**: el PDF se genera en el propio
+   móvil, sin red, con los mismos ejemplares, QR y firmas, y se abre el menú
+   de compartir (WhatsApp, correo, Archivos…). El transportista se lo lleva
+   en su móvil.
 4. **El papel que viaja en el camión.** Cada ejemplar (transportista y, si
    se configura, cargador y destinatario) lleva todos los datos, casillas de
    firma, una referencia `OFF-…` y el **QR del DeCA**. Ese QR lo genera el
@@ -246,8 +253,12 @@ un documento y aplica sus instrucciones de lectura y sus valores fijos
 
 ## 8. Expediciones, ficha de detalle y estados
 
-**Expediciones** es la lista de todos los DeCA: buscador (por nº de albarán
-o por referencia del ERP), filtros por estado, columnas configurables y
+**Expediciones** es la lista de todos los DeCA. Al entrar ves solo las
+**Hechas por mí** (las que diste de alta o generaste tú); marca **Todas**
+para ver las de todos (la pantalla recuerda tu elección). La columna
+**Usuario** dice quién la hizo; en lo que llega del ERP, quién lo generó.
+Buscador (por nº de albarán, nº de DeCA o referencia del ERP), filtros por
+estado y por serie, columnas configurables y
 ordenables, paginación y **Más acciones** para exportar a PDF o Excel
 respetando filtros y orden. La lista se refresca sola cada poco (arriba se ve
 cuándo se actualizó). Arriba aparecen también los DeCA hechos sin cobertura
@@ -265,7 +276,22 @@ anúlalo o **descarta el aviso** si el cambio no afecta al transporte.
 **Peso neto y bruto**: el DeCA lleva los dos en la misma línea (*Peso neto …
 Peso bruto …*). Basta con uno de los dos para generar.
 
-La **ficha de detalle** (expediciones generadas, anuladas o en papel)
+**Número de DeCA y series.** Cada DeCA recibe al generarse un número de su
+serie (p. ej. `DECA-00042`), tenga o no albarán; sale en el PDF y en la
+columna **Nº DeCA**. Las series (una por actividad: `DECA_ALG-`,
+`DECA_TOM-`…) se crean en Configuración; una es la serie **por defecto**. Al
+hacer un DeCA se usa la de por defecto, o marca **Elegir serie** (solo
+aparece si hay más de una). El número se pone al generar (un borrador que se
+borra no gasta número) y la serie ya no se cambia. Si un DeCA no tiene
+albarán ni CMR, al generar se avisa de que su referencia será el número de
+la serie.
+
+**Datos SIGPAC.** Encima de *Información adicional* (en el móvil, en *Más
+datos*) se pueden poner **polígono, parcela y recinto** de la finca de
+origen. Son opcionales: si se rellenan salen en el PDF, la ficha y la hoja
+sin cobertura.
+
+La **ficha de detalle** (expediciones generadas o anuladas)
 muestra los datos, los documentos origen, los transportistas sucesivos, el
 QR con su enlace público y el **historial de auditoría**: cada evento
 (creación, subida de documento, edición campo a campo con quién y qué
@@ -278,7 +304,6 @@ envíos por email, anulación) con fecha y usuario. El historial se exporta a
 | **Borrador** | Editar todo, subir documentos, confirmar, borrar. |
 | **Confirmado** | Generar el DeCA, editar (vuelve a borrador), anular. |
 | **Generado** | Descargar, copiar enlace, enviar por email, corregir dentro del plazo (con motivo), anular, **adjuntar documentos** (p. ej. el CMR firmado que vuelve con el camión: no se lee, no cambia el PDF ni el QR y no se puede quitar después). |
-| **DeCA en papel** | Solo lectura: un DeCA del talonario registrado por foto (ver Configuración). No tiene PDF ni QR de la aplicación. |
 | **Anulado** | Solo lectura. Se puede borrar solo si nunca llegó a generarse el PDF oficial. |
 
 Generar y corregir son **todo o nada**: si falla algo a mitad (el PDF, el

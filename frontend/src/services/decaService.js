@@ -40,6 +40,12 @@ export const decaService = {
   obtenerConfiguracion: () => api.get('/api/v1/deca/configuracion/'),
   actualizarConfiguracion: (data) => api.patch('/api/v1/deca/configuracion/', data),
 
+  // Series de numeración (Configuración de DeCA)
+  listarSeries: () => api.get('/api/v1/deca/series/'),
+  crearSerie: (data) => api.post('/api/v1/deca/series/', data),
+  actualizarSerie: (id, data) => api.patch(`/api/v1/deca/series/${id}/`, data),
+  borrarSerie: (id) => api.delete(`/api/v1/deca/series/${id}/`),
+
   // Catálogos reutilizables -- se alimentan solos al crear/editar una
   // expedición (ver backend deca/services/catalogo_service.py), aquí solo se leen.
   buscarConductores: (q = '') => api.get('/api/v1/deca/conductores/', { params: { solo_activos: 'true', page_size: 500, ...(q ? { q } : {}) } }),
@@ -152,8 +158,6 @@ export const decaService = {
   confirmarExpedicion: (id) => api.post(`/api/v1/deca/expediciones/${id}/confirmar/`),
   generarDeca: (id) => api.post(`/api/v1/deca/expediciones/${id}/generar/`),
   anularExpedicion: (id, motivo = '') => api.post(`/api/v1/deca/expediciones/${id}/anular/`, { motivo }),
-  // DeCA del talonario de papel, registrado con su foto (sin PDF ni QR).
-  registrarPapel: (id) => api.post(`/api/v1/deca/expediciones/${id}/registrar-papel/`),
   enviarEmailExpedicion: (id, { destinatario, asunto = '', cuerpo = '' }) =>
     api.post(`/api/v1/deca/expediciones/${id}/enviar-email/`, { destinatario, asunto, cuerpo }),
 
